@@ -85,10 +85,34 @@ enum axxia_mux_msg_type {
 };
 
 struct axxia_mux_msg {
-	u32 msg;
+	atomic_t msg;
 };
 
 static DEFINE_PER_CPU_SHARED_ALIGNED(struct axxia_mux_msg, ipi_mux_msg);
+
+static inline void atomic_read_set_bit_write(int i, atomic_t *v)
+{
+	unsigned long tmp, tmp2;
+	int result;
+
+	/* Complete all loads/stores before prefetching. */
+	smp_mb();
+	prefetchw(&v->counter);
+
+	__asm__ __volatile__("@ atomic_read_set_bit_write_return\n"
+"1: ldrex   %0, [%4]\n"
+"   mov %2, #1\n"
+"   orr %0, %0, %2, LSL %5\n"
+"   strex   %1, %0, [%4]\n"
+"   teq %1, #0\n"
+"   bne 1b"
+	: "=&r" (result), "=&r" (tmp), "=&r" (tmp2), "+Qo" (v->counter)
+	: "r" (&v->counter), "Ir" (i)
+	: "cc");
+
+	/* Wait for the strex to complete. */
+	smp_wmb();
+}
 
 static void muxed_ipi_message_pass(const struct cpumask *mask,
 				   enum axxia_mux_msg_type ipi_num)
@@ -96,20 +120,19 @@ static void muxed_ipi_message_pass(const struct cpumask *mask,
 	struct axxia_mux_msg *info;
 	int cpu;
 
-	for_each_cpu(cpu, mask) {
-		info = &per_cpu(ipi_mux_msg, cpu_logical_map(cpu));
-		info->msg |= 1 << ipi_num;
-	}
+	for_each_online_cpu(cpu, mask)
+		atomic_read_set_bit_write(ipi_num, &(&per_cpu(ipi_mux_msg,
+			cpu_logical_map(cpu)))->msg);
 }
 
 #ifdef CONFIG_SMP
 static void axxia_ipi_demux(struct pt_regs *regs)
 {
 	struct axxia_mux_msg *info = this_cpu_ptr(&ipi_mux_msg);
-	u32 all;
+	int all;
 
 	do {
-		all = xchg(&info->msg, 0);
+		all = atomic_xchg(&info->msg, 0);
 		if (all & (1 << MUX_MSG_CALL_FUNC))
 			handle_IPI(3, regs); /* 3 = ARM IPI_CALL_FUNC */
 		if (all & (1 << MUX_MSG_CALL_FUNC_SINGLE))
@@ -122,7 +145,7 @@ static void axxia_ipi_demux(struct pt_regs *regs)
 			handle_IPI(7, regs); /* 7 = ARM IPI_COMPLETION */
 		if (all & (1 << MUX_MSG_CPU_WAKEUP))
 			handle_IPI(0, regs); /* 0 = ARM IPI_WAKEUP */
-	} while (info->msg);
+	} while (atomic_read(&info->msg));
 }
 #endif
 
