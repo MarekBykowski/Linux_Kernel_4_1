@@ -470,6 +470,74 @@ void smp_call_function_many(const struct cpumask *mask,
 }
 EXPORT_SYMBOL(smp_call_function_many);
 
+void smp_call_irq_work_many(const struct cpumask *mask,
+                  smp_call_func_t func, void *info, bool wait)
+{
+	struct call_function_data *cfd;
+	int cpu, next_cpu, this_cpu = smp_processor_id();
+
+	/*
+	 * Can deadlock when called with interrupts disabled.
+	 * We allow cpu's that are not yet online though, as no one else can
+	 * send smp call function interrupt to this cpu and as such deadlocks
+	 * can't happen.
+	 */
+	WARN_ON_ONCE(cpu_online(this_cpu) && irqs_disabled()
+		     && !oops_in_progress && !early_boot_irqs_disabled);
+
+	/* Try to fastpath.  So, what's a CPU they want? Ignoring this one. */
+	cpu = cpumask_first_and(mask, cpu_online_mask);
+	if (cpu == this_cpu)
+		cpu = cpumask_next_and(cpu, mask, cpu_online_mask);
+
+	/* No online cpus?  We're done. */
+	if (cpu >= nr_cpu_ids)
+		return;
+
+	/* Do we have another CPU which isn't us? */
+	next_cpu = cpumask_next_and(cpu, mask, cpu_online_mask);
+	if (next_cpu == this_cpu)
+		next_cpu = cpumask_next_and(next_cpu, mask, cpu_online_mask);
+
+	/* Fastpath: do that cpu by itself. */
+	if (next_cpu >= nr_cpu_ids) {
+		smp_call_function_single(cpu, func, info, wait);
+		return;
+	}
+
+	cfd = this_cpu_ptr(&cfd_data);
+
+	cpumask_and(cfd->cpumask, mask, cpu_online_mask);
+	cpumask_clear_cpu(this_cpu, cfd->cpumask);
+
+	/* Some callers race with other cpus changing the passed mask */
+	if (unlikely(!cpumask_weight(cfd->cpumask)))
+		return;
+
+	for_each_cpu(cpu, cfd->cpumask) {
+		struct call_single_data *csd = per_cpu_ptr(cfd->csd, cpu);
+
+		csd_lock(csd);
+		if (wait)
+			csd->flags |= CSD_FLAG_SYNCHRONOUS;
+		csd->func = func;
+		csd->info = info;
+		llist_add(&csd->llist, &per_cpu(call_single_queue, cpu));
+	}
+
+	/* Send a message to all CPUs in the map */
+	arch_irq_work_raise_all(cfd->cpumask);
+
+	if (wait) {
+		for_each_cpu(cpu, cfd->cpumask) {
+			struct call_single_data *csd;
+
+			csd = per_cpu_ptr(cfd->csd, cpu);
+			csd_lock_wait(csd);
+		}
+	}
+}
+
 /**
  * smp_call_function(): Run a function on all other CPUs.
  * @func: The function to run. This must be fast and non-blocking.
@@ -494,6 +562,15 @@ int smp_call_function(smp_call_func_t func, void *info, int wait)
 	return 0;
 }
 EXPORT_SYMBOL(smp_call_function);
+
+int smp_call_irq_work(smp_call_func_t func, void *info, int wait)
+{
+	preempt_disable();
+	smp_call_irq_work_many(cpu_online_mask, func, info, wait);
+	preempt_enable();
+
+	return 0;
+}
 
 /* Setup configured maximum number of CPUs to activate */
 unsigned int setup_max_cpus = NR_CPUS;

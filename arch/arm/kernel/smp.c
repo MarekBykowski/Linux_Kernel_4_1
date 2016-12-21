@@ -518,6 +518,12 @@ void arch_irq_work_raise(void)
 	if (arch_irq_work_has_interrupt())
 		smp_cross_call(cpumask_of(smp_processor_id()), IPI_IRQ_WORK);
 }
+
+void arch_irq_work_raise_all(const struct cpumask *mask)
+{
+	if (arch_irq_work_has_interrupt())
+		smp_cross_call(mask, IPI_IRQ_WORK);
+}
 #endif
 
 #ifdef CONFIG_GENERIC_CLOCKEVENTS_BROADCAST

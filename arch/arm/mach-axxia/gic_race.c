@@ -188,7 +188,6 @@ trigger_irq(struct file *file, const char __user *buf,
 	else disable_irq(40);*/
 
 	if (1 == haha) {
-		pr_info("mb: request_irq(40) haha %d\n", haha);
 		haha = 2;
 		foo= kzalloc(sizeof(*foo), GFP_KERNEL);
 		/* Create kernel thread/work queue*/
@@ -212,7 +211,6 @@ trigger_irq(struct file *file, const char __user *buf,
 			cpu = 0;
 		}
 	} else if (2 == haha) {
-		pr_info("mb: free_irq(40) haha %d\n", haha);
 		haha = 1;
 		free_irq(40, cookie);
 		flush_workqueue(foo->wq);
@@ -246,6 +244,8 @@ trigger_ipi(struct file *file, const char __user *buf,
 	    return -EFAULT;               
 
     smp_call_function(run_me_on_all_cpus, NULL, 0);
+	schedule();
+	smp_call_irq_work(run_me_on_all_cpus, NULL, 0);
 
 	return count;
 }

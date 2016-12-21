@@ -39,6 +39,7 @@
 #include <linux/cpu_pm.h>
 #include <linux/irqdomain.h>
 #include <linux/irqchip/arm-gic.h>
+#include <linux/delay.h>
 
 #include <asm/exception.h>
 #include <asm/smp_plat.h>
@@ -98,6 +99,7 @@ static void muxed_ipi_message_pass(const struct cpumask *mask,
 
 	for_each_cpu(cpu, mask) {
 		info = &per_cpu(ipi_mux_msg, cpu_logical_map(cpu));
+		udelay(1000);
 		info->msg |= 1 << ipi_num;
 	}
 }
@@ -110,6 +112,7 @@ static void axxia_ipi_demux(struct pt_regs *regs)
 
 	do {
 		all = xchg(&info->msg, 0);
+		udelay(1000);
 		if (all & (1 << MUX_MSG_CALL_FUNC))
 			handle_IPI(3, regs); /* 3 = ARM IPI_CALL_FUNC */
 		if (all & (1 << MUX_MSG_CALL_FUNC_SINGLE))
