@@ -152,6 +152,7 @@ struct ncp_trng_axm55xx_reg_sts_t {
 /******************************************************/
 
 struct trng_dev {
+	int marek;
 	struct kref ref;
 	struct platform_device *pdev;
 	unsigned long flags;
@@ -452,7 +453,7 @@ static DRIVER_ATTR(trng_test_mode, S_IRUGO | S_IWUSR,
  */
 static int trng_probe(struct platform_device *pdev)
 {
-	static struct trng_dev *dev;
+	struct trng_dev *dev;
 	void __iomem *regs;
 	int rc;
 	u32 *pregs;
@@ -464,9 +465,14 @@ static int trng_probe(struct platform_device *pdev)
 		rc = -ENOMEM;
 		goto err;
 	}
-	dev_set_drvdata(&pdev->dev, &dev);
+
+	/*dev->driver_data = data;*/
+	dev_set_drvdata(&pdev->dev, dev);
+	dev_info(&pdev->dev,"&pdev->dev %p &dev %p\n", (void*) &pdev->dev, (void*)&dev);
 	kref_init(&dev->ref);
+	kref_refcount(&dev->ref);
 	dev->pdev = pdev;
+	dev->marek = 333;
 
 	/* Map hardware registers */
 	regs = of_iomap(pdev->dev.of_node, 0);
@@ -483,7 +489,8 @@ static int trng_probe(struct platform_device *pdev)
 #endif
 	/* Attach to IRQ */
 	dev->irq = irq_of_parse_and_map(pdev->dev.of_node, 0);
-	rc = request_irq(dev->irq, trng_isr, 0, "trng", &dev);
+	rc = request_irq(dev->irq, trng_isr, 0, "trng", dev);
+	trace_printk(KERN_INFO "mb: %s() reuqest_irq ened with %d\n", __func__, rc);
 	if (rc)
 		goto err;
 
@@ -514,8 +521,10 @@ static int trng_probe(struct platform_device *pdev)
 	return 0;
 
  err:
-	if (dev)
+	if (dev) {
+		kref_refcount(&dev->ref);
 		kref_put(&dev->ref, trng_destroy);
+	}
 	dev_err(&pdev->dev, "Failed to probe device (%d)\n", rc);
 	return rc;
 }
@@ -526,9 +535,13 @@ static int trng_probe(struct platform_device *pdev)
 static int trng_remove(struct platform_device *pdev)
 {
 	struct trng_dev *dev = dev_get_drvdata(&pdev->dev);
+	dev_info(&pdev->dev, "%s() called\n", __func__);
+	dev_info(&pdev->dev,"&pdev->dev %p &dev %p\n", (void*) &pdev->dev, (void*)&dev);
 	/* test_mode */
 	driver_remove_file(pdev->dev.driver, &driver_attr_trng_test_mode);
 
+	dev_info(&pdev->dev, "%s dev->marek %d\n", __func__, dev->marek);
+	kref_refcount(&dev->ref);
 	kref_put(&dev->ref, trng_destroy);
 	return 0;
 }
@@ -541,12 +554,13 @@ static int trng_remove(struct platform_device *pdev)
 static void trng_destroy(struct kref *ref)
 {
 	struct trng_dev *dev = container_of(ref, struct trng_dev, ref);
+	dev_info(&dev->pdev->dev, "mb 1: %s dev->marek %d\n", __func__, dev->marek);
 
 	dev_set_drvdata(&dev->pdev->dev, NULL);
 	if (test_and_clear_bit(FLAG_REGISTERED, &dev->flags))
 		hwrng_unregister(&dev->rng_dev);
 	if (dev->irq)
-		free_irq(dev->irq, &dev);
+		free_irq(dev->irq, dev);
 	iounmap(dev->regs);
 	kfree(dev);
 }

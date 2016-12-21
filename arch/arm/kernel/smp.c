@@ -466,7 +466,12 @@ static const char *ipi_types[NR_IPI] __tracepoint_string = {
 
 static void smp_cross_call(const struct cpumask *target, unsigned int ipinr)
 {
+	unsigned int cpu;
 	trace_ipi_raise(target, ipi_types[ipinr]);
+	if (ipinr == IPI_WAKEUP || ipinr >= IPI_CALL_FUNC || ipinr <= IPI_COMPLETION )
+		for_each_cpu(cpu, target) {
+			__set_start_time(cpu, start_time, ipinr);
+		}
 	__smp_cross_call(target, ipinr);
 }
 
@@ -516,6 +521,12 @@ void arch_irq_work_raise(void)
 {
 	if (arch_irq_work_has_interrupt())
 		smp_cross_call(cpumask_of(smp_processor_id()), IPI_IRQ_WORK);
+}
+
+void arch_irq_work_raise_all(const struct cpumask *mask)
+{
+	if (arch_irq_work_has_interrupt())
+		smp_cross_call(mask, IPI_IRQ_WORK);
 }
 #endif
 
@@ -618,7 +629,8 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 #ifdef CONFIG_IRQ_WORK
 	case IPI_IRQ_WORK:
 		irq_enter();
-		irq_work_run();
+		/*irq_work_run();*/
+		/*dont handle - just to reproduce the race*/
 		irq_exit();
 		break;
 #endif
@@ -635,8 +647,27 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 		break;
 	}
 
-	if ((unsigned)ipinr < NR_IPI)
+	if ((unsigned)ipinr < NR_IPI) {
 		trace_ipi_exit_rcuidle(ipi_types[ipinr]);
+
+/* These are IPIs muxed so that we compute times only on them
+	IPI_WAKEUP,
+	ipi_timer,
+	ipi_reschedule,
+	IPI_CALL_FUNC,
+	IPI_CALL_FUNC_SINGLE,
+	IPI_CPU_STOP,
+	IPI_IRQ_WORK,
+	IPI_COMPLETION,
+ */
+		if (ipinr == IPI_WAKEUP || (ipinr >= IPI_CALL_FUNC && ipinr <= IPI_COMPLETION) ) {
+			ktime_t avg_duration;
+			ktime_t duration = __get_duration(cpu, duration, ipinr);
+			avg_duration.tv64 = (s64) __get_avg_duration(cpu, sma_avg, ipinr); 
+			trace_ipi_duration(ipi_types[ipinr], smp_processor_id(), ktime_to_timespec(duration),
+								ktime_to_timespec(avg_duration));
+		}
+	}
 	set_irq_regs(old_regs);
 }
 
