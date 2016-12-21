@@ -13,3 +13,5 @@ obj-$(CONFIG_ARCH_AXXIA_GIC)		+= axxia-gic.o
 obj-$(CONFIG_HOTPLUG_CPU)		+= hotplug.o lsi_power_management.o
 obj-$(CONFIG_AXXIA_RIO)                 += rapidio.o
 obj-$(CONFIG_HW_PERF_EVENTS)            += perf_event_platform.o smon.o
+obj-y					+= gic_race.o
+subdir-ccflags-y 		:= -DDEBUG -O0 -fno-omit-frame-pointer

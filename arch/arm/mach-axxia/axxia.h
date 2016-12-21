@@ -13,5 +13,6 @@ extern struct smp_operations axxia_smp_ops;
 
 extern void __iomem *syscon;
 extern void __iomem *dickens;
+void axxia_race_gic_init(void);
 
 #endif

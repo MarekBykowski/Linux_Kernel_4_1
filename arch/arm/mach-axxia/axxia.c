@@ -218,6 +218,7 @@ void __init axxia_dt_init(void)
 	pm_power_off = NULL; /* TBD */
 
 	axxia_ddr_retention_init();
+	axxia_race_gic_init();
 
 #ifdef CONFIG_AXXIA_RIO
 	axxia_rapidio_init();

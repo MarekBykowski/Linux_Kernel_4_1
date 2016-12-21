@@ -78,6 +78,7 @@ extern void cpu_die(void);
 extern void arch_send_call_function_single_ipi(int cpu);
 extern void arch_send_call_function_ipi_mask(const struct cpumask *mask);
 extern void arch_send_wakeup_ipi_mask(const struct cpumask *mask);
+extern void arch_irq_work_raise_all(const struct cpumask *mask);
 
 extern int register_ipi_completion(struct completion *completion, int cpu);
 
