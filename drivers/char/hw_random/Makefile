@@ -32,3 +32,4 @@ obj-$(CONFIG_HW_RANDOM_BCM2835) += bcm2835-rng.o
 obj-$(CONFIG_HW_RANDOM_IPROC_RNG200) += iproc-rng200.o
 obj-$(CONFIG_HW_RANDOM_MSM) += msm-rng.o
 obj-$(CONFIG_HW_RANDOM_XGENE) += xgene-rng.o
+subdir-ccflags-y        := -DDEBUG -O0 -fno-omit-frame-pointer

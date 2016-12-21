@@ -466,7 +466,8 @@ static const char *ipi_types[NR_IPI] __tracepoint_string = {
 
 static void smp_cross_call(const struct cpumask *target, unsigned int ipinr)
 {
-	trace_ipi_raise(target, ipi_types[ipinr]);
+	if (ipinr == IPI_WAKEUP || (ipinr >= IPI_CALL_FUNC && ipinr <= IPI_COMPLETION))
+		trace_ipi_raise(target, ipi_types[ipinr]);
 	__smp_cross_call(target, ipinr);
 }
 
@@ -577,7 +578,8 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 	struct pt_regs *old_regs = set_irq_regs(regs);
 
 	if ((unsigned)ipinr < NR_IPI) {
-		trace_ipi_entry_rcuidle(ipi_types[ipinr]);
+		if (ipinr == IPI_WAKEUP || (ipinr >= IPI_CALL_FUNC && ipinr <= IPI_COMPLETION))
+			trace_ipi_entry_rcuidle(ipi_types[ipinr]);
 		__inc_irq_stat(cpu, ipi_irqs[ipinr]);
 	}
 
@@ -636,7 +638,8 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 	}
 
 	if ((unsigned)ipinr < NR_IPI)
-		trace_ipi_exit_rcuidle(ipi_types[ipinr]);
+		if (ipinr == IPI_WAKEUP || (ipinr >= IPI_CALL_FUNC && ipinr <= IPI_COMPLETION))
+			trace_ipi_exit_rcuidle(ipi_types[ipinr]);
 	set_irq_regs(old_regs);
 }
 

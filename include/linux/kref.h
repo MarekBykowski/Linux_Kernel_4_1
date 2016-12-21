@@ -34,6 +34,11 @@ static inline void kref_init(struct kref *kref)
 	atomic_set(&kref->refcount, 1);
 }
 
+static inline void kref_refcount(struct kref *kref)
+{
+	pr_info("mb: %s refcount %d\n", __func__, atomic_read(&kref->refcount));
+}
+
 /**
  * kref_get - increment refcount for object.
  * @kref: object.
