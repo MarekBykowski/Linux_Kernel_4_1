@@ -1,5 +1,8 @@
 #ifndef __irq_cpustat_h
 #define __irq_cpustat_h
+#include <linux/timekeeper_internal.h>
+#include <linux/ktime.h>
+#include <linux/average.h>
 
 /*
  * Contains default mappings for irq_cpustat_t, used by almost every
@@ -17,8 +20,25 @@
  */
 
 #ifndef __ARCH_IRQ_STAT
-extern irq_cpustat_t irq_stat[];		/* defined in asm/hardirq.h */
+extern irq_cpustat_t irq_stat[];		/* type in asm/hardirq.h with var in kernel/softirq.c */
 #define __IRQ_STAT(cpu, member)	(irq_stat[cpu].member)
+#define __SET_START_TIME(cpu, member, ipinr) (irq_stat[cpu].member[ipinr] = ktime_get())
+
+#define __GET_DURATION(cpu, member, ipinr) ({ \
+	irq_stat[cpu].end_time[ipinr] = ktime_get(); \
+	irq_stat[cpu].member[ipinr] = ktime_sub(irq_stat[cpu].end_time[ipinr], irq_stat[cpu].start_time[ipinr]); \
+})
+
+#define __GET_AVG_DURATION(cpu, member, ipinr) ({ \
+	sma_add(&irq_stat[cpu].member[ipinr], (unsigned long)irq_stat[cpu].duration[ipinr].tv64); \
+})
+#endif
+
+#if 0
+#define __GET_AVG_DURATION(cpu, member, ipinr) ({ \
+	sma_add(&irq_stat[cpu].member[ipinr], (unsigned long)irq_stat[cpu].duration[ipinr].tv64); \
+	sma_read(&irq_stat[cpu].member[ipinr]); \
+})
 #endif
 
   /* arch independent irq_stat fields */

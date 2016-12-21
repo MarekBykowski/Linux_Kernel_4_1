@@ -34,6 +34,35 @@ TRACE_EVENT(ipi_raise,
 	TP_printk("target_mask=%s (%s)", __get_bitmask(target_cpus), __entry->reason)
 );
 
+TRACE_EVENT(ipi_duration,
+
+	TP_PROTO(const char *reason, unsigned int cpu, struct timespec duration, struct timespec avg_duration),
+
+	TP_ARGS(reason, cpu, duration, avg_duration),
+
+	TP_STRUCT__entry(
+		__field(const char *, reason)
+		__field(unsigned int, cpu)
+		__field(__kernel_time_t, duration_tv_sec)
+		__field(long, duration_tv_nsec)
+		__field(__kernel_time_t, avg_duration_tv_sec)
+		__field(long, avg_duration_tv_nsec)
+	),
+
+	TP_fast_assign(
+		__entry->reason = reason;
+		__entry->cpu = cpu;
+		__entry->duration_tv_sec = duration.tv_sec;
+		__entry->duration_tv_nsec = duration.tv_nsec;
+		__entry->avg_duration_tv_sec = avg_duration.tv_sec;
+		__entry->avg_duration_tv_nsec = avg_duration.tv_nsec;
+	),
+
+	TP_printk("cpu=%u (%s) (%ld.%09ld) avg(%ld.%09ld)",  __entry->cpu, __entry->reason,  __entry->duration_tv_sec,
+					__entry->duration_tv_nsec, __entry->avg_duration_tv_sec, __entry->avg_duration_tv_nsec)
+);
+
+
 DECLARE_EVENT_CLASS(ipi_handler,
 
 	TP_PROTO(const char *reason),

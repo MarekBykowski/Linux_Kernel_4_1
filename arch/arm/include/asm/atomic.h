@@ -79,6 +79,8 @@ static inline int atomic_##op##_return(int i, atomic_t *v)		\
 									\
 	return result;							\
 }
+ 
+
 
 static inline int atomic_cmpxchg(atomic_t *ptr, int old, int new)
 {

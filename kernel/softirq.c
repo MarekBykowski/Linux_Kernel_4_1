@@ -51,7 +51,22 @@
  */
 
 #ifndef __ARCH_IRQ_STAT
-irq_cpustat_t irq_stat[NR_CPUS] ____cacheline_aligned;
+/* IPIs start flying around earlier than pure_initcall is called */
+#define EARLY_AVG
+#define NR_IPI 8
+#ifdef EARLY_AVG
+irq_cpustat_t irq_stat[NR_CPUS]  ____cacheline_aligned = 
+	{ [0 ... NR_CPUS-1].sma_avg[0 ... NR_IPI-1].n = 1000 };
+#else
+static int __init ipi_sma_init (void) {
+	unsigned int cpu, i;
+	for_each_online_cpu(cpu)
+		for (i = 0; i < NR_IPI; i++)
+			sma_init(&irq_stat[cpu].sma_avg[i], 1000);
+	return 0;
+}
+pure_initcall(ipi_sma_init);
+#endif /* EARLY_AVG */
 EXPORT_SYMBOL(irq_stat);
 #endif
 
