@@ -69,12 +69,12 @@ int mb_atomic_read_set_bit_write(int i, atomic_t *v)
 static void marek_ipi_message_pass(const struct cpumask *mask,
 				   int i)
 {
-	int cpu;
+	int lcpu = smp_processor_id();
 	unsigned int val;
 	struct marek_mux_msg* info;
-	info = &per_cpu(marek_mux_msg_val, cpu_logical_map(cpu));
+	info = &per_cpu(marek_mux_msg_val, cpu_logical_map(lcpu));
 
-	for_each_cpu(cpu, mask) {
+	for_each_cpu(lcpu, mask) {
 		val = mb_atomic_read_set_bit_write(i, &info->msg);
 		pr_info("mb: %s val 0x%x", __func__, val);
 	}
@@ -85,19 +85,6 @@ static void marek_ipi_message_pass(const struct cpumask *mask,
 static bool on_same_cluster(u32 pcpu1, u32 pcpu2)
 {
 	return pcpu1 / CORES_PER_CLUSTER == pcpu2 / CORES_PER_CLUSTER;
-}
-
-static ssize_t
-trigger_tty(struct file *file, const char __user *buf,
-			    size_t count, loff_t *ppos)
-{
-	unsigned int cpu = 0;
-	int val, s=3;
-	val = mb_atomic_read_set_bit_write(s, &(&per_cpu(marek_mux_msg_val, cpu_logical_map(cpu)))->msg);
-	pr_info("mb: %s val 0x%x", __func__, val);
-	val = mb_atomic_read_set_bit_write(s, &(&per_cpu(marek_mux_msg_val, cpu_logical_map(cpu)))->msg);
-	pr_info("mb: %s val 0x%x", __func__, val);
-	return count;
 }
 
 
@@ -169,10 +156,10 @@ static int haha = 1;
 void *cookie = &haha;
 
 static ssize_t
-trigger_irq(struct file *file, const char __user *buf,
+trigger_ipi_func_single(struct file *file, const char __user *buf,
 			    size_t count, loff_t *ppos)
 {
-	static unsigned int cpu = 0;
+	static unsigned int lcpu = 0;
 	u32 pcpu = cpu_logical_map(smp_processor_id());
 	char to_tty[3] = { 0 };
 	unsigned int var;
@@ -199,16 +186,16 @@ trigger_irq(struct file *file, const char __user *buf,
 			BUG_ON(1);
 		trace_printk("requested irq 40\n");
 
-		while (on_same_cluster(pcpu, cpu_logical_map(cpu))) 
-				cpu++;                     
+		while (on_same_cluster(pcpu, cpu_logical_map(lcpu))) 
+				lcpu++;                     
 
-		if (cpu <= 15) {          
-			trace_printk("I'm on CPU(%u) needing to execute irq_set_affinity() on CPU(%u)\n", pcpu, cpu);              
-			if (irq_set_affinity(40, cpumask_of(cpu)))             
-				pr_warning("unable to set irq affinity (irq=%d, cpu=%u)\n", 40, cpu);
-			cpu++;
+		if (lcpu <= 15) {          
+			trace_printk("I'm on cpu(%u) needing to execute irq_set_affinity() on cpu(%u)\n", pcpu, lcpu);              
+			if (irq_set_affinity(40, cpumask_of(lcpu)))             
+				pr_warning("unable to set irq affinity (irq=%d, cpu=%u)\n", 40, lcpu);
+			lcpu++;
 		} else {
-			cpu = 0;
+			lcpu = 0;
 		}
 	} else if (2 == haha) {
 		haha = 1;
@@ -229,45 +216,37 @@ static void run_me_on_all_cpus(void *args)
 
 
 static ssize_t
-trigger_ipi(struct file *file, const char __user *buf,
+trigger_ipi_func(struct file *file, const char __user *buf,
 			    size_t count, loff_t *ppos)
 {
-	int irq = 40; /*irq of trgn*/
-	unsigned int cpu = 0;
-	char to_tty[3] = { 0 };
-	struct irq_desc *desc = irq_to_desc(irq);	
-
-	if (copy_from_user(to_tty, buf, count))
-	    return -EFAULT;                              
-
-	if (kstrtou32(to_tty, 10, &cpu))
-	    return -EFAULT;               
-
-    smp_call_function(run_me_on_all_cpus, NULL, 0);
-	schedule();
-	smp_call_irq_work(run_me_on_all_cpus, NULL, 0);
-
+    smp_call_function(run_me_on_all_cpus, NULL, true);
 	return count;
 }
 
-static const struct file_operations tty_ops = {
-	.write      = trigger_tty,
-};
+static ssize_t
+trigger_ipi_irq_work(struct file *file, const char __user *buf,
+			    size_t count, loff_t *ppos)
+{
+	smp_call_irq_work(run_me_on_all_cpus, NULL, true);
+	return count;
+}
 
-static const struct file_operations irq_ops = {
-	.write      = trigger_irq,
+static const struct file_operations ipi_func_single_ops = {
+	.write      = trigger_ipi_func_single,
 };
-
-static const struct file_operations ipi_single_ops = {
-	.write      = trigger_ipi,
+static const struct file_operations ipi_func_ops = {
+	.write      = trigger_ipi_func,
+};
+static const struct file_operations ipi_irq_work_ops = {
+	.write      = trigger_ipi_irq_work,
 };
 
 void
 axxia_race_gic_init(void)
 {
 	/* Create /proc entry. */
-	proc_create("driver/tty", S_IWUSR, NULL, &tty_ops);
-	proc_create("irq-req-free", S_IWUSR, NULL, &irq_ops);
-	proc_create("ipi-single", S_IWUSR, NULL, &ipi_single_ops);
+	proc_create("ipi-func-single", S_IWUSR, NULL, &ipi_func_single_ops);
+	proc_create("ipi-func", S_IWUSR, NULL, &ipi_func_ops);
+	proc_create("ipi-irq-work", S_IWUSR, NULL, &ipi_irq_work_ops);
 	return;
 }

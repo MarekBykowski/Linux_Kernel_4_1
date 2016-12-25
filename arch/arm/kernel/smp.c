@@ -626,7 +626,8 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 #ifdef CONFIG_IRQ_WORK
 	case IPI_IRQ_WORK:
 		irq_enter();
-		irq_work_run();
+		/*irq_work_run();*/
+		/*dont handle - just to reproduce the race*/
 		irq_exit();
 		break;
 #endif
