@@ -99,7 +99,7 @@ static void muxed_ipi_message_pass(const struct cpumask *mask,
 
 	for_each_cpu(cpu, mask) {
 		info = &per_cpu(ipi_mux_msg, cpu_logical_map(cpu));
-		udelay(100);
+		/*udelay(100);*/
 		info->msg |= 1 << ipi_num;
 	}
 }
@@ -124,7 +124,7 @@ static void axxia_ipi_demux(struct pt_regs *regs)
 			handle_IPI(7, regs); /* 7 = ARM IPI_COMPLETION */
 		if (all & (1 << MUX_MSG_CPU_WAKEUP))
 			handle_IPI(0, regs); /* 0 = ARM IPI_WAKEUP */
-		udelay(100);
+		/*udelay(100);*/
 	} while (info->msg);
 }
 #endif
