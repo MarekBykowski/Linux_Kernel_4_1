@@ -85,63 +85,42 @@ enum axxia_mux_msg_type {
 };
 
 struct axxia_mux_msg {
-	atomic_t msg;
+	long unsigned msg;
 };
 
 static DEFINE_PER_CPU_SHARED_ALIGNED(struct axxia_mux_msg, ipi_mux_msg);
 
-static inline void atomic_read_set_bit_write(int i, atomic_t *v) 
-{                                   
-    unsigned long tmp, tmp2;             
-    int result;                   
-                                 
-    smp_mb();                   
-    prefetchw(&v->counter);    
-                              
-    __asm__ __volatile__("@ atomic_read_set_bit_write_return\n"    
-"1: ldrex   %0, [%4]\n"                   
-"   mov %2, #1\n"
-"   orr %0, %0, %2, LSL %5\n"            
-"   strex   %1, %0, [%4]\n"             
-"   teq %1, #0\n"                      
-"   bne 1b"                       
-    : "=&r" (result), "=&r" (tmp), "=&r" (tmp2), "+Qo" (v->counter) 
-	: "r" (&v->counter), "Ir" (i)
-    : "cc");                          
-
-	/* Wait for the strex to complete. */
-	smp_wmb();
-}
-
 static void muxed_ipi_message_pass(const struct cpumask *mask,
 				   enum axxia_mux_msg_type ipi_num)
 {
+	struct axxia_mux_msg *info;
 	int cpu;
-	for_each_cpu(cpu, mask)
-		atomic_read_set_bit_write(ipi_num, &(&per_cpu(ipi_mux_msg, cpu_logical_map(cpu)))->msg);
+
+	for_each_cpu(cpu, mask) {
+		info = &per_cpu(ipi_mux_msg, cpu_logical_map(cpu));
+		set_bit(ipi_num, &info->msg);
+	}
 }
 
 #ifdef CONFIG_SMP
 static void axxia_ipi_demux(struct pt_regs *regs)
 {
 	struct axxia_mux_msg *info = this_cpu_ptr(&ipi_mux_msg);
-	int all;
+	u32 all;
 
-	do {
-		all = atomic_xchg(&info->msg, 0);
-		if (all & (1 << MUX_MSG_CALL_FUNC))
-			handle_IPI(3, regs); /* 3 = ARM IPI_CALL_FUNC */
-		if (all & (1 << MUX_MSG_CALL_FUNC_SINGLE)) 
-			handle_IPI(4, regs); /* 4 = ARM IPI_CALL_FUNC_SINGLE */
-		if (all & (1 << MUX_MSG_CPU_STOP))
-			handle_IPI(5, regs); /* 5 = ARM IPI_CPU_STOP */
-		if (all & (1 << MUX_MSG_IRQ_WORK))
-			handle_IPI(6, regs); /* 6 = ARM IPI_IRQ_WORK */
-		if (all & (1 << MUX_MSG_COMPLETION))
-			handle_IPI(7, regs); /* 7 = ARM IPI_COMPLETION */
-		if (all & (1 << MUX_MSG_CPU_WAKEUP))
-			handle_IPI(0, regs); /* 0 = ARM IPI_WAKEUP */
-	} while (atomic_read(&info->msg));
+	all = xchg(&info->msg, 0);
+	if (all & (1 << MUX_MSG_CALL_FUNC))
+		handle_IPI(3, regs); /* 3 = ARM IPI_CALL_FUNC */
+	if (all & (1 << MUX_MSG_CALL_FUNC_SINGLE))
+		handle_IPI(4, regs); /* 4 = ARM IPI_CALL_FUNC_SINGLE */
+	if (all & (1 << MUX_MSG_CPU_STOP))
+		handle_IPI(5, regs); /* 5 = ARM IPI_CPU_STOP */
+	if (all & (1 << MUX_MSG_IRQ_WORK))
+		handle_IPI(6, regs); /* 6 = ARM IPI_IRQ_WORK */
+	if (all & (1 << MUX_MSG_COMPLETION))
+		handle_IPI(7, regs); /* 7 = ARM IPI_COMPLETION */
+	if (all & (1 << MUX_MSG_CPU_WAKEUP))
+		handle_IPI(0, regs); /* 0 = ARM IPI_WAKEUP */
 }
 #endif
 
@@ -1249,14 +1228,6 @@ static void __cpuinit gic_cpu_init(struct gic_chip_data *gic)
 	for (i = 0; i < 32; i += 4)
 		writel_relaxed(0xa0a0a0a0,
 				dist_base + GIC_DIST_PRI + i * 4 / 4);
-
-	/*
-	 * Set priority on IPI2
-	 */
-	/*for (i = IPI2_CPU0; i < IPI2_CPU3; i += 4)
-        writel_relaxed(0x90909090,
-     	       	dist_base + GIC_DIST_PRI + i * 4 / 4);*/
-
 
 	writel_relaxed(0xf0, base + GIC_CPU_PRIMASK);
 	writel_relaxed(1, base + GIC_CPU_CTRL);
