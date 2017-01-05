@@ -88,49 +88,6 @@ static bool on_same_cluster(u32 pcpu1, u32 pcpu2)
 	return pcpu1 / CORES_PER_CLUSTER == pcpu2 / CORES_PER_CLUSTER;
 }
 
-
-#if 0
-static ssize_t
-trigger_tty(struct file *file, const char __user *buf,
-			    size_t count, loff_t *ppos)
-{
-	int irq = 88; /*irq of ttyAMA0*/
-	unsigned int cpu = 0;
-	unsigned int val;
-	int s;
-	preempt_disable();
-	u32 pcpu = cpu_logical_map(smp_processor_id());
-	atomic_t value = ATOMIC_INIT(0x2);
-	char to_tty[3] = { 0 };
-	struct irq_desc *desc = irq_to_desc(irq);	
-	printk(KERN_INFO "mb: %s value 0x%x\n", __func__, atomic_read_set_bit_write(3, &value));
-	printk(KERN_INFO "mb: %s desc->action->name %s\n", __func__, desc->action->name);	
-
-	if (copy_from_user(to_tty, buf, count))
-	    return -EFAULT;                              
-
-	if (kstrtou32(to_tty, 10, &cpu))
-	    return -EFAULT;               
-
-	if (irq_set_affinity(irq, cpumask_of(cpu)) && irq > 32)             
-		pr_warning("unable to set irq affinity (irq=%d, cpu=%u)\n", irq, cpu);
-
-	while (on_same_cluster(pcpu, cpu_logical_map(cpu))) {
-		cpu++;
-	}
-	s=3;
-	printk(KERN_INFO "mb: %s value 0x%x\n", __func__, s);
-	val = mb_atomic_read_set_bit_write(s, &(&per_cpu(marek_mux_msg_val, cpu_logical_map(cpu)))->msg);
-	pr_info("mb: %s val 0x%x", __func__, val);
-	val = mb_atomic_read_set_bit_write(s, &(&per_cpu(marek_mux_msg_val, cpu_logical_map(cpu)))->msg);
-	pr_info("mb: %s val 0x%x", __func__, val);
-	/*marek_ipi_message_pass(cpumask_of(cpu), 3);
-	marek_ipi_message_pass(cpumask_of(cpu), 7);*/
-	preempt_enable();
-	return count;
-}
-#endif
-
 struct foo {
 	int marek;
 	struct workqueue_struct *wq;
@@ -212,8 +169,9 @@ trigger_ipi_func_single(struct file *file, const char __user *buf,
 
 static void run_me_on_remote_cpu(void *args)
 {
-	/*trace_printk("mb: %s() -> smp_call_function\n", __func__);*/
-	return;
+	/* just anything */
+	int i = 100;
+	i += 50;
 }
 
 static ssize_t
@@ -284,10 +242,8 @@ static const struct file_operations test_sma_ops = {
 void
 axxia_race_gic_init(void)
 {
-	/* Create /proc entry. */
 	proc_create("ipi-func-single", S_IWUSR, NULL, &ipi_func_single_ops);
 	proc_create("ipi-func", S_IWUSR, NULL, &ipi_func_ops);
 	proc_create("ipi-irq-work", S_IWUSR, NULL, &ipi_irq_work_ops);
 	proc_create("sma", S_IWUSR, NULL, &test_sma_ops);
-	return;
 }
