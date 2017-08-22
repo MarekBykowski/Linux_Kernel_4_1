@@ -63,3 +63,5 @@ obj-$(CONFIG_AXXIA_MDIO)        += axxia-mdio.o
 obj-$(CONFIG_ECHO)		+= echo/
 obj-$(CONFIG_VEXPRESS_SYSCFG)	+= vexpress-syscfg.o
 obj-$(CONFIG_CXL_BASE)		+= cxl/
+
+obj-y += axxia-mdio-scan.o
