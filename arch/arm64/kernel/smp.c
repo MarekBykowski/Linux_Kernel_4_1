@@ -547,6 +547,7 @@ static DEFINE_RAW_SPINLOCK(stop_lock);
  */
 static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 {
+	unsigned cpuno;
 #ifdef CONFIG_KEXEC
 	/* printing messages may slow down the shutdown. */
 	if (!in_crash_kexec)
@@ -554,7 +555,7 @@ static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 		if (system_state == SYSTEM_BOOTING ||
 		    system_state == SYSTEM_RUNNING) {
 			raw_spin_lock(&stop_lock);
-			pr_crit("CPU%u: stopping\n", cpu);
+			pr_info("CPU%u: stopping\n", cpu);
 			dump_stack();
 			raw_spin_unlock(&stop_lock);
 		}
@@ -568,6 +569,8 @@ static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 		crash_save_cpu(regs, cpu);
 #endif /* CONFIG_KEXEC */
 
+	asm volatile("mrs %0, mpidr_el1\n" : "=r" (cpuno));
+	pr_info("mb: going for cpu_relax on mpdir 0x%x\n", (unsigned int) cpuno);
 	while (1)
 		cpu_relax();
 }
