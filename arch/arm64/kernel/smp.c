@@ -146,7 +146,7 @@ asmlinkage void secondary_start_kernel(void)
 	cpumask_set_cpu(cpu, mm_cpumask(mm));
 
 	set_my_cpu_offset(per_cpu_offset(smp_processor_id()));
-	printk("CPU%u: Booted secondary processor\n", cpu);
+	printk("mb: CPU%u: Booted secondary processor\n", cpu);
 
 	/*
 	 * TTBR0 is only used for the identity mapping at this stage. Make it
@@ -547,7 +547,6 @@ static DEFINE_RAW_SPINLOCK(stop_lock);
  */
 static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 {
-	unsigned cpuno;
 #ifdef CONFIG_KEXEC
 	/* printing messages may slow down the shutdown. */
 	if (!in_crash_kexec)
@@ -555,7 +554,7 @@ static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 		if (system_state == SYSTEM_BOOTING ||
 		    system_state == SYSTEM_RUNNING) {
 			raw_spin_lock(&stop_lock);
-			pr_info("CPU%u: stopping\n", cpu);
+			pr_crit("CPU%u: stopping\n", cpu);
 			dump_stack();
 			raw_spin_unlock(&stop_lock);
 		}
@@ -569,8 +568,6 @@ static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 		crash_save_cpu(regs, cpu);
 #endif /* CONFIG_KEXEC */
 
-	asm volatile("mrs %0, mpidr_el1\n" : "=r" (cpuno));
-	pr_info("mb: going for cpu_relax on mpdir 0x%x\n", (unsigned int) cpuno);
 	while (1)
 		cpu_relax();
 }

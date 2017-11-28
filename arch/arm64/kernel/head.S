@@ -501,6 +501,14 @@ ENDPROC(__mmap_switched)
  * booted in EL1 or EL2 respectively.
  */
 ENTRY(el2_setup)
+
+#if 0
+	/* Disable L1 D-prefetch */
+	mrs x0, S3_1_c15_c2_0   /* cpuactlr_el1 */
+	bic x0, x0, #0x7<<13
+	msr S3_1_c15_c2_0, x0   /* cpuactlr_el1 */
+#endif
+
 	mrs	x0, CurrentEL
 	cmp	x0, #CurrentEL_EL2
 	b.ne	1f
