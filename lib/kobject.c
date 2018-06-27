@@ -221,7 +221,9 @@ static int kobject_add_internal(struct kobject *kobj)
 		kobj->parent = parent;
 	}
 
-	pr_debug("kobject: '%s' (%p): %s: parent: '%s', set: '%s'\n",
+	/*pr_debug("kobject: '%s' (%p): %s: parent: '%s', set: '%s'\n",*/
+	if (strncmp(kobj->name,"pcietest", 8) == 0)
+		trace_printk("mb: kobject: '%s' (%p): %s: parent: '%s', set: '%s'\n",
 		 kobject_name(kobj), kobj, __func__,
 		 parent ? kobject_name(parent) : "<NULL>",
 		 kobj->kset ? kobject_name(&kobj->kset->kobj) : "<NULL>");

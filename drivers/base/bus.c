@@ -301,7 +301,7 @@ int bus_for_each_dev(struct bus_type *bus, struct device *start,
 		     void *data, int (*fn)(struct device *, void *))
 {
 	struct klist_iter i;
-	struct device *dev;
+	struct device *dev = NULL;
 	int error = 0;
 
 	if (!bus || !bus->p)
@@ -309,6 +309,18 @@ int bus_for_each_dev(struct bus_type *bus, struct device *start,
 
 	klist_iter_init_node(&bus->p->klist_devices, &i,
 			     (start ? &start->p->knode_bus : NULL));
+
+	if (data) {
+		if (((struct device_driver *)data)->name) {
+			if (strncmp(((struct device_driver *)data)->name,"pcietest",8) == 0) {
+				unsigned count=0;
+				while (next_device(&i))
+					count++;
+				trace_printk("mb: pcie bus has %u devices\n",count);
+			}
+		}
+	}
+
 	while ((dev = next_device(&i)) && !error)
 		error = fn(dev, data);
 	klist_iter_exit(&i);
@@ -319,7 +331,7 @@ EXPORT_SYMBOL_GPL(bus_for_each_dev);
 /**
  * bus_find_device - device iterator for locating a particular device.
  * @bus: bus type
- * @start: Device to begin with
+ * @star: Device to begin with
  * @data: Data to pass to match function
  * @match: Callback function to check device
  *
@@ -681,7 +693,9 @@ int bus_add_driver(struct device_driver *drv)
 	if (!bus)
 		return -EINVAL;
 
-	pr_debug("bus: '%s': add driver %s\n", bus->name, drv->name);
+	/*pr_debug("bus: '%s': add driver %s\n", bus->name, drv->name);*/
+	if (strncmp(drv->name,"pcietest",8) == 0)
+		trace_printk("mb: bus: '%s': add driver %s\n", bus->name, drv->name);
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (!priv) {

@@ -114,6 +114,11 @@ extern void driver_deferred_probe_del(struct device *dev);
 static inline int driver_match_device(struct device_driver *drv,
 				      struct device *dev)
 {
+	if (strncmp(drv->name,"pcietest",8) == 0) {
+		/*trace_printk("drv->bus->match(dev, drv) calls bcallback @ %p\n",
+			(void*)drv->bus->match);*/
+		/*found, this is pci_bus_match()*/
+	}
 	return drv->bus->match ? drv->bus->match(dev, drv) : 1;
 }
 extern bool driver_allows_async_probing(struct device_driver *drv);

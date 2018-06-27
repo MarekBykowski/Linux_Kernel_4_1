@@ -264,17 +264,28 @@ static const struct pci_device_id *pci_match_device(struct pci_driver *drv,
 	list_for_each_entry(dynid, &drv->dynids.list, node) {
 		if (pci_match_one_device(&dynid->id, dev)) {
 			found_id = &dynid->id;
+			if (found_id)
+				trace_printk("mb: dev->vendor 0x%x dev->device 0x%x\n",
+					found_id->vendor, found_id->device);
 			break;
 		}
 	}
 	spin_unlock(&drv->dynids.lock);
 
-	if (!found_id)
+	if (!found_id) {
 		found_id = pci_match_id(drv->id_table, dev);
+		if (found_id)
+			trace_printk("mb: dev->vendor 0x%x dev->device 0x%x\n",
+				found_id->vendor, found_id->device);
+	}
 
 	/* driver_override will always match, send a dummy id */
-	if (!found_id && dev->driver_override)
+	if (!found_id && dev->driver_override) {
 		found_id = &pci_device_id_any;
+		if (found_id)
+			trace_printk("mb: dev->vendor 0x%x dev->device 0x%x\n",
+				found_id->vendor, found_id->device);
+	}
 
 	return found_id;
 }
