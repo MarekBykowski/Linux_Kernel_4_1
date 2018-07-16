@@ -40,21 +40,27 @@
 #include "virt-dma.h"
 #include "lsi-dma32.h"
 
+#define DEBUG
 #ifdef DEBUG
 #define engine_dbg(engine, fmt, ...) \
 	do { \
 		struct gpdma_engine *_e = engine; \
 		(void)_e; \
-		pr_debug("dma0: " fmt, ##__VA_ARGS__); \
+		pr_info("dma0: " fmt, ##__VA_ARGS__); \
 	} while (0)
 
 #define ch_dbg(dmac, fmt, ...) \
 	do { \
 		struct gpdma_channel *_c = dmac; \
 		(void)_c; \
-		pr_debug("dma0ch%d: [%s] " fmt, \
+		pr_info("dma0ch%d: [%s] " fmt, \
 			dmac->id, __func__, ##__VA_ARGS__); \
 	} while (0)
+#undef dev_dbg
+#define dev_dbg(dev, fmt, ...) \
+	do { \
+		pr_info("mb: " fmt, ##__VA_ARGS__); \
+	} while (0) 
 #else
 #define engine_dbg(engine, fmt, ...) do {} while (0)
 #define ch_dbg(dmac, fmt, ...)       do {} while (0)
@@ -136,12 +142,18 @@ static int alloc_desc_table(struct gpdma_engine *engine)
 		 */
 		order = get_order(GPDMA_MAX_DESCRIPTORS *
 				  sizeof(struct gpdma_desc));
+		trace_printk("mb: order %u\n",order);
 	}
 
 	engine->pool.va = (struct gpdma_desc *)
 			  __get_free_pages(GFP_KERNEL|GFP_DMA, order);
-	if (!engine->pool.va)
+	if (!engine->pool.va) {
 		return -ENOMEM;
+	} else {
+		engine_dbg(engine, "memset(%p,0,%lx)\n",
+				(void*)engine->pool.va, (unsigned long)order*0x1000);
+		memset(engine->pool.va,0,order*0x1000);
+	}
 	engine->pool.order = order;
 	engine->pool.phys = virt_to_phys(engine->pool.va);
 	engine_dbg(engine, "order=%d pa=%#llx va=%p\n",
@@ -220,6 +232,9 @@ static void init_descriptor(struct gpdma_desc *desc,
 	desc->hw.dst_x_mod     = cpu_to_le32(1 << dst_acc);
 	desc->hw.dst_y_mod     = 0;
 	desc->hw.dst_addr      = cpu_to_le32(dst & 0xffffffff);
+	trace_printk("mb: desc->hw.src_addr %p desc->hw.dst_addr %p\n",
+			(void*)(volatile unsigned*)(unsigned long)desc->hw.src_addr, 
+			(void*)(volatile unsigned*)(unsigned long)desc->hw.dst_addr);
 }
 
 static phys_addr_t desc_to_paddr(const struct gpdma_channel *dmac,
@@ -241,6 +256,8 @@ static void free_descriptor(struct virt_dma_desc *vd)
 	struct gpdma_desc *desc = to_gpdma_desc(vd);
 	struct gpdma_engine *engine = desc->engine;
 	unsigned long flags;
+
+	trace_printk("is vd being freed?\n");	
 
 	BUG_ON(desc == NULL);
 
@@ -269,6 +286,8 @@ static void gpdma_start(struct gpdma_channel *dmac)
 	phys_addr_t           paddr;
 
 	vdesc = vchan_next_desc(&dmac->vc);
+	trace_printk("mb: next desc vdesc @ %p\n", (void*)vdesc);
+	trace_printk("mb: rm from list and mark actrive\n");
 	if (!vdesc) {
 		clear_bit(dmac->id, &dmac->engine->ch_busy);
 		dmac->active = NULL;
@@ -278,6 +297,7 @@ static void gpdma_start(struct gpdma_channel *dmac)
 	/* Remove from list and mark as active */
 	list_del(&vdesc->node);
 	desc = to_gpdma_desc(vdesc);
+	trace_printk("mb: desc including vdesc @ %p\n", (void*)desc);
 	dmac->active = desc;
 
 	if (!(dmac->engine->chip->flags & LSIDMA_SEG_REGS)) {
@@ -291,9 +311,11 @@ static void gpdma_start(struct gpdma_channel *dmac)
 
 	/* Physical address of descriptor to load */
 	paddr = desc_to_paddr(dmac, desc);
+	trace_printk("mb: PA of desc %p\n", (void*)paddr);
 	writel((u32)paddr, dmac->base + DMA_NXT_DESCR);
 
 	if (dmac->engine->chip->flags & LSIDMA_SEG_REGS) {
+		trace_printk("LSIDMA_SEG_REGS");
 		/* Segment bits [39..32] of descriptor, src and dst addresses */
 		writel(paddr >> 32, dmac->base + DMA_DESCR_ADDR_SEG);
 		writel(desc->src >> 32, dmac->base + DMA_SRC_ADDR_SEG);
@@ -361,9 +383,11 @@ static irqreturn_t gpdma_isr(int irqno, void *_dmac)
 	BUG_ON(desc == NULL);
 
 	spin_lock(&dmac->vc.lock);
+	trace_printk("mb: before vchan_cookie_complete()\n");
 	vchan_cookie_complete(&desc->vdesc);
 	dmac->active = NULL;
 	if (vchan_next_desc(&dmac->vc)) {
+		trace_printk("mb: after vchan_next_desc()\n");
 		gpdma_start(dmac);
 	} else {
 		/* Stop channel */
@@ -574,6 +598,8 @@ gpdma_prep_memcpy(struct dma_chan *chan,
 	struct gpdma_desc *first = NULL, *prev = NULL, *new;
 	u32 src_acc, dst_acc;
 	size_t len;
+	
+	trace_printk("mb: is it being called?\n");
 
 	if (size == 0)
 		return NULL;
@@ -795,6 +821,7 @@ static int gpdma_of_probe(struct platform_device *op)
 		++id;
 	}
 
+/*mb:*/
 	soft_reset(engine);
 
 	rc = dma_async_device_register(&engine->dma_device);

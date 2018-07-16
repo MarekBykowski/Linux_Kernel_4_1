@@ -129,10 +129,12 @@ dmaengine_desc_callback_invoke(struct dmaengine_desc_callback *cb,
 	};
 
 	if (cb->callback_result) {
+		trace_printk("mb: if callback_result != NULL than cb->callback_result @ %p\n",(void*)(cb->callback_result));
 		if (!result)
 			result = &dummy_result;
 		cb->callback_result(cb->callback_param, result);
 	} else if (cb->callback) {
+		trace_printk("mb: if callback != NULL than cb->callback @ %p\n",(void*)(cb->callback));
 		cb->callback(cb->callback_param);
 	}
 }

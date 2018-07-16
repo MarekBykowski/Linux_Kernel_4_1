@@ -79,6 +79,8 @@ struct virt_dma_desc *vchan_find_desc(struct virt_dma_chan *vc,
 }
 EXPORT_SYMBOL_GPL(vchan_find_desc);
 
+#include "lsi-dma32.h"
+
 /*
  * This tasklet handles the completion of a DMA descriptor by
  * calling its callback and freeing it.
@@ -101,10 +103,48 @@ static void vchan_complete(unsigned long arg)
 	}
 	spin_unlock_irq(&vc->lock);
 
+{
+	struct dmaengine_desc_callback volatile *pcb = (struct dmaengine_desc_callback volatile*) (&cb);
+	trace_printk(
+				"mb: sizeof(cb) %lu\n"
+				"cb %p cb_result %p cb_param %p\n",
+				sizeof(cb),
+				pcb->callback,
+				pcb->callback_result,
+				pcb->callback_param
+	);
+}
+
 	dmaengine_desc_callback_invoke(&cb, NULL);
+
+{
+	struct virt_dma_desc *tmp;	
+	unsigned count = 0;
+	list_for_each_entry(tmp, &head, node) {
+		trace_printk(
+			"vd @ %p: sizeof(tmp->tx) %lx cookie %d\n",
+			tmp, sizeof(tmp->tx), tmp->tx.cookie
+		);
+		trace_printk(
+			"count %u desc %p: vdesc offset 0x%lx tx offset 0x%lx callback offset 0x%lx " 
+			"tmp->tx.callback @ %p "
+			"tmp->tx.callback_result @ %p "
+			"tmp->tx.callback_param @ %p\n",
+			count++, 
+			container_of(tmp, struct gpdma_desc, vdesc),
+			offsetof(struct gpdma_desc, vdesc),
+			offsetof(struct virt_dma_desc, tx),
+			offsetof(struct dma_async_tx_descriptor, callback), 
+			/*(void*)to_gpdma_desc(tmp),*/
+			tmp->tx.callback, tmp->tx.callback_result, tmp->tx.callback_param
+		);
+	}
+}
+
 
 	while (!list_empty(&head)) {
 		vd = list_first_entry(&head, struct virt_dma_desc, node);
+		trace_printk("vd @ %p\n", (void*)vd);
 		dmaengine_desc_get_callback(&vd->tx, &cb);
 
 		list_del(&vd->node);
@@ -112,6 +152,18 @@ static void vchan_complete(unsigned long arg)
 			list_add(&vd->node, &vc->desc_allocated);
 		else
 			vc->desc_free(vd);
+
+		{
+			struct dmaengine_desc_callback volatile *pcb = (struct dmaengine_desc_callback volatile*) (&cb);
+			trace_printk(
+						"mb: sizeof(cb) %lu\n"
+						"cb %p cb_result %p cb_param %p\n",
+						sizeof(cb),
+						pcb->callback,
+						pcb->callback_result,
+						pcb->callback_param
+			);
+		}
 
 		dmaengine_desc_callback_invoke(&cb, NULL);
 	}

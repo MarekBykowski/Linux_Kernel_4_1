@@ -96,6 +96,7 @@ static inline void vchan_cookie_complete(struct virt_dma_desc *vd)
 
 	cookie = vd->tx.cookie;
 	dma_cookie_complete(&vd->tx);
+	trace_printk("mb: txd %p[%x]: marked complete\n", vd, cookie);
 	dev_vdbg(vc->chan.device->dev, "txd %p[%x]: marked complete\n",
 		 vd, cookie);
 	list_add_tail(&vd->node, &vc->desc_completed);
