@@ -211,6 +211,9 @@ static void init_descriptor(struct gpdma_desc *desc,
 	BUG_ON(src_count * (1<<src_acc) != len);
 	BUG_ON(dst_count * (1<<dst_acc) != len);
 
+	desc->vdesc.tx.callback_result = NULL;
+	desc->vdesc.tx.callback = NULL;
+
 	desc->src = src;
 	desc->dst = dst;
 
