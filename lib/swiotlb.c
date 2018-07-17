@@ -755,6 +755,7 @@ dma_addr_t swiotlb_map_page(struct device *dev, struct page *page,
 			    unsigned long attrs)
 {
 	phys_addr_t map, phys = page_to_phys(page) + offset;
+	/*phys_addr_t map, phys = page_address(page) + offset;*/
 	dma_addr_t dev_addr = phys_to_dma(dev, phys);
 
 	BUG_ON(dir == DMA_NONE);

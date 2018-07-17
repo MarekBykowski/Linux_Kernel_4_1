@@ -11,6 +11,8 @@
 #include <linux/kmemcheck.h>
 #include <linux/bug.h>
 
+#include <asm/cacheflush.h>
+
 /**
  * List of possible attributes associated with a DMA mapping. The semantics
  * of each attribute should be defined in Documentation/DMA-attributes.txt.
@@ -86,7 +88,16 @@ struct dma_map_ops {
 			       unsigned long offset, size_t size,
 			       enum dma_data_direction dir,
 			       unsigned long attrs);
+
+	dma_addr_t (*map_page_par_l1)(struct device *dev,
+				  unsigned long addr, size_t size,
+				  enum dma_data_direction dir);
+
 	void (*unmap_page)(struct device *dev, dma_addr_t dma_handle,
+			   size_t size, enum dma_data_direction dir,
+			   unsigned long attrs);
+
+	void (*unmap_page_par_l1)(struct device *dev, dma_addr_t dma_handle,
 			   size_t size, enum dma_data_direction dir,
 			   unsigned long attrs);
 	/*
@@ -196,6 +207,23 @@ static inline dma_addr_t dma_map_single_attrs(struct device *dev, void *ptr,
 	return addr;
 }
 
+static inline dma_addr_t dma_map_single_par_l1(struct device *dev, void *ptr,
+					      size_t size,
+					      enum dma_data_direction dir)
+{
+	struct dma_map_ops *ops = get_dma_ops(dev);
+	dma_addr_t addr;
+
+	kmemcheck_mark_initialized(ptr, size);
+	BUG_ON(!valid_dma_direction(dir));
+	addr = ops->map_page_par_l1(dev, (unsigned long)ptr,
+			     size, dir);
+	debug_dma_map_page(dev, virt_to_page(ptr),
+			   offset_in_page(ptr), size,
+			   dir, addr, true);
+	return addr;
+}
+
 static inline void dma_unmap_single_attrs(struct device *dev, dma_addr_t addr,
 					  size_t size,
 					  enum dma_data_direction dir,
@@ -206,6 +234,19 @@ static inline void dma_unmap_single_attrs(struct device *dev, dma_addr_t addr,
 	BUG_ON(!valid_dma_direction(dir));
 	if (ops->unmap_page)
 		ops->unmap_page(dev, addr, size, dir, attrs);
+	debug_dma_unmap_page(dev, addr, size, dir, true);
+}
+
+static inline void dma_unmap_single_attrs_par_l1(struct device *dev, dma_addr_t addr,
+					  size_t size,
+					  enum dma_data_direction dir,
+					  unsigned long attrs)
+{
+	struct dma_map_ops *ops = get_dma_ops(dev);
+
+	BUG_ON(!valid_dma_direction(dir));
+	if (ops->unmap_page)
+		ops->unmap_page_par_l1(dev, addr, size, dir, attrs);
 	debug_dma_unmap_page(dev, addr, size, dir, true);
 }
 
