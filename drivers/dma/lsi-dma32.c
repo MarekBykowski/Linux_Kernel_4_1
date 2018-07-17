@@ -146,14 +146,9 @@ static int alloc_desc_table(struct gpdma_engine *engine)
 	}
 
 	engine->pool.va = (struct gpdma_desc *)
-			  __get_free_pages(GFP_KERNEL|GFP_DMA, order);
-	if (!engine->pool.va) {
+			  __get_free_pages(GFP_KERNEL|GFP_DMA|__GFP_ZERO, order);
+	if (!engine->pool.va)
 		return -ENOMEM;
-	} else {
-		engine_dbg(engine, "memset(%p,0,%lx)\n",
-				(void*)engine->pool.va, (unsigned long)order*0x1000);
-		memset(engine->pool.va,0,order*0x1000);
-	}
 	engine->pool.order = order;
 	engine->pool.phys = virt_to_phys(engine->pool.va);
 	engine_dbg(engine, "order=%d pa=%#llx va=%p\n",
@@ -162,10 +157,19 @@ static int alloc_desc_table(struct gpdma_engine *engine)
 	INIT_LIST_HEAD(&engine->free_list);
 	for (i = 0; i < GPDMA_MAX_DESCRIPTORS; i++) {
 		struct gpdma_desc *desc = &engine->pool.va[i];
+		pr_info("mb: desc[%d] %p\n", i, (void*)desc);
 
 		async_tx_ack(&desc->vdesc.tx);
 		desc->engine = engine;
 		list_add_tail(&desc->vdesc.node, &engine->free_list);
+
+		if (desc->vdesc.tx.callback)
+			trace_printk("desc[%d] %p desc->vdesc.tx.callback %p\n", i, (void*)desc, desc->vdesc.tx.callback);
+		if (desc->vdesc.tx.callback_result)
+			trace_printk("desc[%d] %p desc->vdesc.tx.callback_result %p\n", i, (void*)desc, desc->vdesc.tx.callback_result);
+		if (desc->vdesc.tx.callback_param)
+			trace_printk("desc[%d] %p desc->vdesc.tx.callback_param %p\n", i, (void*)desc, desc->vdesc.tx.callback_param);
+		
 	}
 
 	return 0;
@@ -211,8 +215,10 @@ static void init_descriptor(struct gpdma_desc *desc,
 	BUG_ON(src_count * (1<<src_acc) != len);
 	BUG_ON(dst_count * (1<<dst_acc) != len);
 
+#if 0
 	desc->vdesc.tx.callback_result = NULL;
 	desc->vdesc.tx.callback = NULL;
+#endif
 
 	desc->src = src;
 	desc->dst = dst;
@@ -290,13 +296,13 @@ static void gpdma_start(struct gpdma_channel *dmac)
 
 	vdesc = vchan_next_desc(&dmac->vc);
 	trace_printk("mb: next desc vdesc @ %p\n", (void*)vdesc);
-	trace_printk("mb: rm from list and mark actrive\n");
 	if (!vdesc) {
 		clear_bit(dmac->id, &dmac->engine->ch_busy);
 		dmac->active = NULL;
 		return;
 	}
 
+	trace_printk("mb: rm from list and mark actrive\n");
 	/* Remove from list and mark as active */
 	list_del(&vdesc->node);
 	desc = to_gpdma_desc(vdesc);
@@ -360,6 +366,12 @@ static irqreturn_t gpdma_isr(int irqno, void *_dmac)
 	struct gpdma_desc    *desc = dmac->active;
 	u32                  status;
 	u32	             error;
+
+	
+	trace_printk("in isr before taking a decriptor\n");
+	trace_printk("desc->vdesc.tx.callback %p\n", desc->vdesc.tx.callback);
+	trace_printk("desc->vdesc.tx.callback_result %p\n", desc->vdesc.tx.callback_result);
+	trace_printk("desc->vdesc.tx.callback_param %p\n", desc->vdesc.tx.callback_param);
 
 	status = readl(dmac->base+DMA_STATUS);
 	error = status & DMA_STATUS_ERROR;
@@ -620,7 +632,21 @@ gpdma_prep_memcpy(struct dma_chan *chan,
 		src_acc = min(ffs((u32)src | len) - 1, 4);
 		dst_acc = min(ffs((u32)dst | len) - 1, 4);
 
+		if (new->vdesc.tx.callback)
+			trace_printk("new->vdesc.tx.callback %p\n", new->vdesc.tx.callback);
+		if (new->vdesc.tx.callback_result)
+			trace_printk("new->vdesc.tx.callback_result %p\n", new->vdesc.tx.callback_result);
+		if (new->vdesc.tx.callback_param)
+			trace_printk("new->vdesc.tx.callback_param %p\n", new->vdesc.tx.callback_param);
+
 		init_descriptor(new, src, src_acc, dst, dst_acc, len);
+
+		if (new->vdesc.tx.callback)
+			trace_printk("new->vdesc.tx.callback %p\n", new->vdesc.tx.callback);
+		if (new->vdesc.tx.callback_result)
+			trace_printk("new->vdesc.tx.callback_result %p\n", new->vdesc.tx.callback_result);
+		if (new->vdesc.tx.callback_param)
+			trace_printk("new->vdesc.tx.callback_param %p\n", new->vdesc.tx.callback_param);
 
 		if (!first) {
 			first = new;
