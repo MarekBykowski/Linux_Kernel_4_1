@@ -129,6 +129,52 @@ static int alloc_desc_table(struct gpdma_engine *engine)
 	u32 order = 20 - PAGE_SHIFT;
 	int i;
 
+/*
+ * addr 0x0 -> hnf 0x0 set 0
+ * fill no 1 addr 0x40      
+ * fill no 2 addr 0x80      
+ * fill no 3 addr 0xc0      
+ * fill no 4 addr 0x100     
+ * fill no 5 addr 0x140     
+ * fill no 6 addr 0x180     
+ * fill no 7 addr 0x1c0     
+ * fill no 8 addr 0x200     
+ * fill no 9 addr 0x240     
+ * fill no 10 addr 0x280    
+ * fill no 11 addr 0x2c0    
+ * fill no 12 addr 0x300    
+ * fill no 13 addr 0x340    
+ * fill no 14 addr 0x380    
+ * fill no 15 addr 0x3c0    
+ * fill no 16 addr 0x400    
+ * fill no 17 addr 0x440    
+ * fill no 18 addr 0x480    
+ * fill no 19 addr 0x4c0    
+ * fill no 20 addr 0x500    
+ * fill no 21 addr 0x540    
+ * fill no 22 addr 0x580    
+ * fill no 23 addr 0x5c0    
+ * fill no 24 addr 0x600    
+ * fill no 25 addr 0x640    
+ * fill no 26 addr 0x680    
+ * fill no 27 addr 0x6c0    
+ * fill no 28 addr 0x700    
+ * fill no 29 addr 0x740    
+ * fill no 30 addr 0x780    
+ * fill no 31 addr 0x7c0    
+ * fill no 32 addr 0x800    
+ */
+	void __iomem *va = ioremap_cache(0x4000, 0x1000);
+	pr_info("mb: va of 0-0x1000 %p\n", va);
+{
+	unsigned long addr;
+	for (addr=0; addr<=0x800; addr=addr+0x40) {
+		pr_info("mb: %lx+(unsigned long)%lx\n", addr, (unsigned long)va);
+		*(volatile unsigned*) (addr+(unsigned long)va) = 0xdeadbeef;
+		pr_info("mb: %x @ %p\n", *(volatile unsigned*)(addr+(unsigned long)va), (void*)(addr+(unsigned long)va));
+	}
+}
+
 	if (engine->chip->flags & LSIDMA_NEXT_FULL) {
 		/*
 		 * Controller can do full descriptor addresses, then we need no
