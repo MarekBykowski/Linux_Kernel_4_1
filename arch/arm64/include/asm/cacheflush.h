@@ -86,6 +86,7 @@ static inline void flush_cache_page(struct vm_area_struct *vma,
  */
 extern void __dma_map_area(const void *, size_t, int);
 extern void __dma_unmap_area(const void *, size_t, int);
+extern void __dma_unmap_area_mb(const void *, size_t, int);
 extern void __dma_flush_area(const void *, size_t);
 
 /*

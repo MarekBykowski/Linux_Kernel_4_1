@@ -1,3 +1,4 @@
+#define DEBUG
 #include <linux/string.h>
 #include <linux/kernel.h>
 #include <linux/of.h>
@@ -143,6 +144,8 @@ void of_dma_configure(struct device *dev, struct device_node *np)
 	dev_dbg(dev, "device is%sdma coherent\n",
 		coherent ? " " : " not ");
 
+#if 1 /*mb*/ 
+#endif
 	iommu = of_iommu_configure(dev, np);
 	dev_dbg(dev, "device is%sbehind an iommu\n",
 		iommu ? " " : " not ");

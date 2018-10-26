@@ -197,4 +197,20 @@ ENTRY(__dma_unmap_area)
 	cmp	w2, #DMA_TO_DEVICE
 	b.ne	__dma_inv_area
 	ret
-ENDPIPROC(__dma_unmap_area)
+
+/*	
+* __dma_unmap_area_mb(start, size)
+* - start   - virtual start address of region
+* - size    - size in question
+*/
+ENTRY(__dma_unmap_area_mb)
+	cmp	w2, #DMA_TO_DEVICE
+	b.eq 2f
+	add	x1, x1, x0
+1:	dc	ivac, x0			// invalidate D / U line
+	add	x0, x0, #64
+	cmp	x0, x1
+	b.lo	1b
+	dsb	ish
+2: 	ret
+ENDPIPROC(__dma_unmap_area_mb)

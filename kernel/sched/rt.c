@@ -1797,6 +1797,7 @@ retry:
 	get_task_struct(next_task);
 
 	/* find_lock_lowest_rq locks the rq if found */
+	/*mb: this is where double_lock_balance is called */
 	lowest_rq = find_lock_lowest_rq(next_task, rq);
 	if (!lowest_rq) {
 		struct task_struct *task;
@@ -1993,17 +1994,33 @@ void rto_push_irq_work_func(struct irq_work *work)
 		container_of(work, struct root_domain, rto_push_work);
 	struct rq *rq;
 	int cpu;
+#define APPLY_FIX 0
+#if APPLY_FIX
+	unsigned long flags;
+#endif
 
 	rq = this_rq();
+#if 0
+	trace_printk("mb: in_irq() retuns %d\n\n", (bool)in_irq());	
+	dump_stack();
+#endif
 
 	/*
 	 * We do not need to grab the lock to check for has_pushable_tasks.
 	 * When it gets updated, a check is made if a push is possible.
 	 */
 	if (has_pushable_tasks(rq)) {
+#if !APPLY_FIX
 		raw_spin_lock(&rq->lock);
+#else
+		raw_spin_lock_irqsave(&rq->lock, flags);
+#endif
 		push_rt_tasks(rq);
+#if !APPLY_FIX
 		raw_spin_unlock(&rq->lock);
+#else
+		raw_spin_unlock_irqrestore(&rq->lock, flags);
+#endif
 	}
 
 	raw_spin_lock(&rd->rto_lock);

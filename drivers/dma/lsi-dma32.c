@@ -810,6 +810,7 @@ static int gpdma_of_probe(struct platform_device *op)
 	/* Initialize dma_device struct */
 	dma = &engine->dma_device;
 	dma->dev = &op->dev;
+    pr_info("mb: dma engine %s\n", dev_name(dma->dev));
 	dma_cap_zero(dma->cap_mask);
 	dma_cap_set(DMA_MEMCPY, dma->cap_mask);
 	dma_cap_set(DMA_SG, dma->cap_mask);

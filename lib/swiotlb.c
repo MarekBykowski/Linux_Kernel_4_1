@@ -755,6 +755,7 @@ dma_addr_t swiotlb_map_page(struct device *dev, struct page *page,
 			    unsigned long attrs)
 {
 	phys_addr_t map, phys = page_to_phys(page) + offset;
+	/*phys_addr_t map, phys = page_address(page) + offset;*/
 	dma_addr_t dev_addr = phys_to_dma(dev, phys);
 
 	BUG_ON(dir == DMA_NONE);
@@ -803,6 +804,7 @@ static void unmap_single(struct device *hwdev, dma_addr_t dev_addr,
 	BUG_ON(dir == DMA_NONE);
 
 	if (is_swiotlb_buffer(paddr)) {
+		trace_printk("mb: am I in dma unmap bounce buiffer\n");
 		swiotlb_tbl_unmap_single(hwdev, paddr, size, dir);
 		return;
 	}

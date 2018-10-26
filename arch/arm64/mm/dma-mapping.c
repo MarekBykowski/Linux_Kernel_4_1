@@ -217,15 +217,79 @@ static dma_addr_t __swiotlb_map_page(struct device *dev, struct page *page,
 	return dev_addr;
 }
 
+static inline unsigned long
+virtual2physical(struct device *dev, unsigned long address, size_t size, enum dma_data_direction dir) {
+	unsigned long par_el1;
+	dma_addr_t dev_addr;
 
-static void __swiotlb_unmap_page(struct device *dev, dma_addr_t dev_addr,
+#if 0
+	pr_info("----- Translating VA 0x%lx\n", address);
+#endif
+	__asm__ __volatile__ ("at s1e1r, %0" : : "r" (address));
+	__asm__ __volatile__ ("mrs %0, PAR_EL1\n" : "=r" (par_el1));
+
+#if 0
+	if (0 != (par_el1 & 1)) {
+		pr_info("Address Translation Failed: 0x%lx\n"
+			  "    FSC: 0x%lx\n"
+			  "    PTW: 0x%lx\n"
+			  "      S: 0x%lx\n",
+			  address,
+			  (par_el1 & 0x7e) >> 1,
+			  (par_el1 & 0x100) >> 8,
+			  (par_el1 & 0x200) >> 9);
+	} else {
+		pr_info("Address Translation Succeeded: 0x%lx\n"
+			  "  SH: 0x%lx\t(b11 -> Innnershareable)\n"
+			  "  NS: 0x%lx\t(unknown for non-secure)\n"
+			  "  PA: 0x%lx\t(bits[47:12] of PA)\n"
+			  "ATTR: 0x%lx\t(bits[7:4]11RW -> Outer WBNT,bits[3:0]11RW -> Inner WBNT)\n",
+			  address,
+			  (par_el1 & 0x180) >> 7,
+			  (par_el1 & 0x200) >> 9,
+			  par_el1 & 0xfffffffff000,
+			  (par_el1 & 0xff00000000000000) >> 56);
+	}
+#endif
+
+
+	dev_addr = par_el1 & 0xfffffffff000;
+	return (unsigned long) dev_addr;
+}
+
+static dma_addr_t __swiotlb_map_page_par_l1(struct device *dev,
+				     unsigned long addr, size_t size,
+				     enum dma_data_direction dir)
+{
+	dma_addr_t dev_addr;
+
+	dev_addr = virtual2physical(dev, addr, size, dir);
+	if (!is_device_dma_coherent(dev))
+		__dma_map_area((void*) addr, size, dir);
+
+	return dev_addr;
+}
+
+static void __swiotlb_unmap_page_par_l1(struct device *dev, dma_addr_t dev_addr,
 				 size_t size, enum dma_data_direction dir,
 				 unsigned long attrs)
 {
 	if (!is_device_dma_coherent(dev))
-		__dma_unmap_area(phys_to_virt(dma_to_phys(dev, dev_addr)), size, dir);
+		__dma_unmap_area((void*)attrs/*virt*/, size, dir);
+	/*__dma_unmap_area_mb(phys_to_virt(dma_to_phys(dev, dev_addr)), size, dir);*/
+	attrs = 0; /*unused below but make it explicit here*/
 	swiotlb_unmap_page(dev, dev_addr, size, dir, attrs);
 }
+
+static void __swiotlb_unmap_page(struct device *dev, dma_addr_t dev_addr,
+                                 size_t size, enum dma_data_direction dir,
+                                 unsigned long attrs)
+{
+	if (!is_device_dma_coherent(dev))
+			__dma_unmap_area(phys_to_virt(dma_to_phys(dev, dev_addr)), size, dir);
+	swiotlb_unmap_page(dev, dev_addr, size, dir, attrs);
+}
+
 
 static int __swiotlb_map_sg_attrs(struct device *dev, struct scatterlist *sgl,
 				  int nelems, enum dma_data_direction dir,
@@ -365,7 +429,9 @@ static struct dma_map_ops swiotlb_dma_ops = {
 	.mmap = __swiotlb_mmap,
 	.get_sgtable = __swiotlb_get_sgtable,
 	.map_page = __swiotlb_map_page,
+	.map_page_par_l1 = __swiotlb_map_page_par_l1,
 	.unmap_page = __swiotlb_unmap_page,
+	.unmap_page_par_l1 = __swiotlb_unmap_page_par_l1,
 	.map_sg = __swiotlb_map_sg_attrs,
 	.unmap_sg = __swiotlb_unmap_sg_attrs,
 	.sync_single_for_cpu = __swiotlb_sync_single_for_cpu,
