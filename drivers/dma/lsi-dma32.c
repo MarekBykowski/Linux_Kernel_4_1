@@ -164,16 +164,6 @@ static int alloc_desc_table(struct gpdma_engine *engine)
  * fill no 31 addr 0x7c0    
  * fill no 32 addr 0x800    
  */
-	void __iomem *va = ioremap_cache(0x4000, 0x1000);
-	pr_info("mb: va of 0-0x1000 %p\n", va);
-{
-	unsigned long addr;
-	for (addr=0; addr<=0x800; addr=addr+0x40) {
-		pr_info("mb: %lx+(unsigned long)%lx\n", addr, (unsigned long)va);
-		*(volatile unsigned*) (addr+(unsigned long)va) = 0xdeadbeef;
-		pr_info("mb: %x @ %p\n", *(volatile unsigned*)(addr+(unsigned long)va), (void*)(addr+(unsigned long)va));
-	}
-}
 
 	if (engine->chip->flags & LSIDMA_NEXT_FULL) {
 		/*
