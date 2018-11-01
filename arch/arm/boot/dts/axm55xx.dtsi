@@ -68,22 +68,29 @@
 			     <1 10 0xf08>;
 	};
 
-	edac: edac0@0x1000 {
-		compatible = "lsi,edac";
-		reg = <0 0x00220000 0 0x1000>,
-			<0 0x000f0000 0 0x1000>,
-			<0x20 0x10030000 0 0001000>,
-			<0x20 0x00200400 0 0001000>,
-			<0x20 0x00210400 0 0001000>,
-			<0x20 0x00220400 0 0001000>,
-			<0x20 0x00230400 0 0001000>,
-			<0x20 0x00240400 0 0001000>,
-			<0x20 0x00250400 0 0001000>,
-			<0x20 0x00260400 0 0001000>,
-			<0x20 0x00270400 0 0001000>;
-		interrupts = <0 160 4>,
-			<0 161 4>;
-		device_type = "edac";
+	edac_cpu: edac_cpu {
+		compatible = "lsi,cortex-a15-cpu";
+        syscon = <&syscon>;
+		status = "disabled";
+	};
+
+	edac_l2: edac_l2 {
+		compatible = "lsi,cortex-a15-l2-cache";
+        syscon = <&syscon>;
+		status = "disabled";
+	};
+
+	edac_l3: edac_l3@0x2000210400 {
+		compatible = "lsi,ccn504-l3-cache";
+		reg = <0x20 0x00200400 0 0x0001000>,
+			<0x20 0x00210400 0 0x0001000>,
+			<0x20 0x00220400 0 0x0001000>,
+			<0x20 0x00230400 0 0x0001000>,
+			<0x20 0x00240400 0 0x0001000>,
+			<0x20 0x00250400 0 0x0001000>,
+			<0x20 0x00260400 0 0x0001000>,
+			<0x20 0x00270400 0 0x0001000>;
+        syscon = <&syscon>;
 		status = "disabled";
 	};
 
@@ -103,6 +110,7 @@
 		compatible = "lsi,smmon";
 		reg = <0 0x00220000 0 0x1000>,
 			<0x20 0x10030000 0 0001000>;
+        syscon = <&syscon>;
 		interrupts = <0 161 4>;
 		status = "disabled";
 	};
@@ -111,6 +119,7 @@
 		compatible = "lsi,smmon";
 		reg = <0 0x000f0000 0 0x1000>,
 			<0x20 0x10030000 0 0001000>;
+        syscon = <&syscon>;
 		interrupts = <0 160 4>;
 		status = "disabled";
 	};
@@ -141,6 +150,11 @@
 		#size-cells = <2>;
 		interrupt-parent = <&gic>;
 		ranges;
+
+		syscon: syscon@0x2010030000 {
+			compatible = "lsi,axxia-syscon", "syscon";
+			reg = <0x20 0x10030000 0 0x40000>;
+		};
 
 		gpdma0: gpdma@2020140000 {
 			compatible = "lsi,dma32";

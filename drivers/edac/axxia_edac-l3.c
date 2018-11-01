@@ -48,7 +48,7 @@ struct lsi_edac_dev_info {
 	char *blk_name;
 	int edac_idx;
 	struct regmap *syscon;
-	void __iomem *dickens_L3;
+	void __iomem *dickens_L3[8]; /*8x HNFs in the CCN*/
 	struct edac_device_ctl_info *edac_dev;
 	void (*check)(struct edac_device_ctl_info *edac_dev);
 };
@@ -58,15 +58,14 @@ static void lsi_l3_error_check(struct edac_device_ctl_info *edac_dev)
 {
 	unsigned long regVal1, regVal2;
 	unsigned count = 0;
-	int i, instance;
+	int i, HNF;
 	struct lsi_edac_dev_info *dev_info;
 
 	dev_info = (struct lsi_edac_dev_info *) edac_dev->pvt_info;
 
-	for (instance = 0; instance < 8; instance++) {
-		regVal1 = readl(dev_info->dickens_L3 + (instance * 0x10000));
-		regVal2 = readl(dev_info->dickens_L3 +
-			(instance * 0x10000) + 4);
+	for (HNF = 0; HNF < 8; HNF++) {
+		regVal1 = readl(dev_info->dickens_L3[HNF]);
+		regVal2 = readl(dev_info->dickens_L3[HNF] + 4);
 		/* First error valid */
 		if (regVal2 & 0x40000000) {
 			if (regVal2 & 0x30000000) {
@@ -81,10 +80,9 @@ static void lsi_l3_error_check(struct edac_device_ctl_info *edac_dev)
 			count = (regVal2 & 0x07fff800) >> 11;
 			for (i = 0; i < count; i++)
 				edac_device_handle_ce(edac_dev, 0,
-					instance, edac_dev->ctl_name);
+					HNF, edac_dev->ctl_name);
 			/* clear the valid bit */
-			writel(0x48000000, dev_info->dickens_L3 +
-				(instance * 0x10000) + 84);
+			writel(0x48000000, dev_info->dickens_L3[HNF] + 84);
 		}
 	}
 }
@@ -94,6 +92,7 @@ static int lsi_edac_l3_probe(struct platform_device *pdev)
 	struct lsi_edac_dev_info *dev_info = NULL;
 	struct device_node *np = pdev->dev.of_node;
 	struct resource *r;
+	unsigned HNF;
 
 	dev_info = devm_kzalloc(&pdev->dev, sizeof(*dev_info), GFP_KERNEL);
 	if (!dev_info)
@@ -104,17 +103,20 @@ static int lsi_edac_l3_probe(struct platform_device *pdev)
 	dev_info->pdev = pdev;
 	dev_info->edac_idx = edac_device_alloc_index();
 
-	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!r) {
-		pr_err("Unable to get mem resource\n");
-		goto err1;
-	}
+	for (HNF=0; HNF<8; HNF++) {
+		r = platform_get_resource(pdev, IORESOURCE_MEM, HNF);
+		if (!r) {
+			pr_err("Unable to get mem resource\n");
+			goto err1;
+		}
 
-	dev_info->dickens_L3 = devm_ioremap(&pdev->dev, r->start,
-					    resource_size(r));
-	if (!dev_info->dickens_L3) {
-		pr_err("LSI_L3 devm_ioremap error\n");
-		goto err1;
+		dev_info->dickens_L3[HNF] = devm_ioremap(&pdev->dev, r->start,
+							resource_size(r));
+
+		if (!dev_info->dickens_L3[HNF]) {
+			pr_err("LSI_L3 devm_ioremap error\n");
+			goto err1;
+		}
 	}
 
 	dev_info->syscon =
