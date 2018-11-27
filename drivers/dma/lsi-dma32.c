@@ -40,6 +40,8 @@
 #include "virt-dma.h"
 #include "lsi-dma32.h"
 
+#define DEBUG
+
 #ifdef DEBUG
 #define engine_dbg(engine, fmt, ...) \
 	do { \
@@ -186,7 +188,7 @@ static int alloc_desc_table(struct gpdma_engine *engine)
 	INIT_LIST_HEAD(&engine->free_list);
 	for (i = 0; i < GPDMA_MAX_DESCRIPTORS; i++) {
 		struct gpdma_desc *desc = &engine->pool.va[i];
-		pr_info("mb: desc[%d] %p\n", i, (void*)desc);
+		/*pr_info("mb: desc[%d] %p\n", i, (void*)desc);*/
 
 		async_tx_ack(&desc->vdesc.tx);
 		desc->engine = engine;
@@ -645,6 +647,10 @@ gpdma_prep_memcpy(struct dma_chan *chan,
 		len = min_t(size_t, size, (size_t)SZ_64K);
 
 		/* Maximize access width based on address and length alignmet */
+/*
+ * ffs() returns zero if the input was zero, otherwise returns the bit
+ * position of the first set bit, where the LSB is 1 and MSB is 32.
+ */
 		src_acc = min(ffs((u32)src | len) - 1, 4);
 		dst_acc = min(ffs((u32)dst | len) - 1, 4);
 

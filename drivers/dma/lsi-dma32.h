@@ -22,7 +22,8 @@
 #include "virt-dma.h"
 
 #define MAX_GPDMA_CHANNELS      4
-#define GPDMA_MAX_DESCRIPTORS  128
+/*#define GPDMA_MAX_DESCRIPTORS  128*/
+#define GPDMA_MAX_DESCRIPTORS  256
 #define GPDMA_MAGIC            0xABCD1234UL
 
 #define DMA_X_SRC_COUNT				0x00
