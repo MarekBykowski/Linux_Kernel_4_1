@@ -61,7 +61,7 @@ static const char *axxia_dt_match[] __initconst = {
 	NULL
 };
 
-static void __iomem *base;
+void __iomem *base;
 void __iomem *dickens;
 
 static void set_l3_pstate(u32 newstate)
@@ -194,6 +194,8 @@ static struct notifier_block axxia_amba_nb = {
 	.notifier_call = axxia_bus_notifier,
 };
 
+extern void axxia_l3_error_injection(void);
+
 void __init axxia_dt_init(void)
 {
 	base = ioremap(0x2010000000, 0x40000);
@@ -204,6 +206,8 @@ void __init axxia_dt_init(void)
 #endif
 		flush_l3();
 	}
+
+	axxia_l3_error_injection();
 
 #ifdef CONFIG_ARCH_AXXIA_NCR_RESET_CHECK
 	ncr_reset_active = 0;

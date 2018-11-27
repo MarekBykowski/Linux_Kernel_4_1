@@ -5,6 +5,7 @@ obj-y					+= axxia.o
 obj-y					+= clock.o
 obj-y					+= io.o
 obj-y					+= ssp-gpio.o
+obj-y					+= edac_inject_errors.o
 #obj-y					+= ncr.o
 obj-y					+= timers.o
 obj-y					+= ddr_retention.o ddr_shutdown.o

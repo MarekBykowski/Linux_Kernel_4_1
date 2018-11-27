@@ -35,7 +35,7 @@
 };
 
 &edac_l3 {
-	status = "okay";
+	status = "disabled";
 };
 
 &femac {
