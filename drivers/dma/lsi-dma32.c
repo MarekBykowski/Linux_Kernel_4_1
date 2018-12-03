@@ -129,6 +129,52 @@ static int alloc_desc_table(struct gpdma_engine *engine)
 	u32 order = 20 - PAGE_SHIFT;
 	int i;
 
+/*
+ * addr 0x0 -> hnf 0x0 set 0
+ * fill no 1 addr 0x40      
+ * fill no 2 addr 0x80      
+ * fill no 3 addr 0xc0      
+ * fill no 4 addr 0x100     
+ * fill no 5 addr 0x140     
+ * fill no 6 addr 0x180     
+ * fill no 7 addr 0x1c0     
+ * fill no 8 addr 0x200     
+ * fill no 9 addr 0x240     
+ * fill no 10 addr 0x280    
+ * fill no 11 addr 0x2c0    
+ * fill no 12 addr 0x300    
+ * fill no 13 addr 0x340    
+ * fill no 14 addr 0x380    
+ * fill no 15 addr 0x3c0    
+ * fill no 16 addr 0x400    
+ * fill no 17 addr 0x440    
+ * fill no 18 addr 0x480    
+ * fill no 19 addr 0x4c0    
+ * fill no 20 addr 0x500    
+ * fill no 21 addr 0x540    
+ * fill no 22 addr 0x580    
+ * fill no 23 addr 0x5c0    
+ * fill no 24 addr 0x600    
+ * fill no 25 addr 0x640    
+ * fill no 26 addr 0x680    
+ * fill no 27 addr 0x6c0    
+ * fill no 28 addr 0x700    
+ * fill no 29 addr 0x740    
+ * fill no 30 addr 0x780    
+ * fill no 31 addr 0x7c0    
+ * fill no 32 addr 0x800    
+ */
+	void __iomem *va = ioremap_cache(0x4000, 0x1000);
+	pr_info("mb: va of 0-0x1000 %p\n", va);
+{
+	unsigned long addr;
+	for (addr=0; addr<=0x800; addr=addr+0x40) {
+		pr_info("mb: %lx+(unsigned long)%lx\n", addr, (unsigned long)va);
+		*(volatile unsigned*) (addr+(unsigned long)va) = 0xdeadbeef;
+		pr_info("mb: %x @ %p\n", *(volatile unsigned*)(addr+(unsigned long)va), (void*)(addr+(unsigned long)va));
+	}
+}
+
 	if (engine->chip->flags & LSIDMA_NEXT_FULL) {
 		/*
 		 * Controller can do full descriptor addresses, then we need no
@@ -139,7 +185,7 @@ static int alloc_desc_table(struct gpdma_engine *engine)
 	}
 
 	engine->pool.va = (struct gpdma_desc *)
-			  __get_free_pages(GFP_KERNEL|GFP_DMA, order);
+			  __get_free_pages(GFP_KERNEL|GFP_DMA|__GFP_ZERO, order);
 	if (!engine->pool.va)
 		return -ENOMEM;
 	engine->pool.order = order;
@@ -150,10 +196,19 @@ static int alloc_desc_table(struct gpdma_engine *engine)
 	INIT_LIST_HEAD(&engine->free_list);
 	for (i = 0; i < GPDMA_MAX_DESCRIPTORS; i++) {
 		struct gpdma_desc *desc = &engine->pool.va[i];
+		pr_info("mb: desc[%d] %p\n", i, (void*)desc);
 
 		async_tx_ack(&desc->vdesc.tx);
 		desc->engine = engine;
 		list_add_tail(&desc->vdesc.node, &engine->free_list);
+
+		if (desc->vdesc.tx.callback)
+			trace_printk("desc[%d] %p desc->vdesc.tx.callback %p\n", i, (void*)desc, desc->vdesc.tx.callback);
+		if (desc->vdesc.tx.callback_result)
+			trace_printk("desc[%d] %p desc->vdesc.tx.callback_result %p\n", i, (void*)desc, desc->vdesc.tx.callback_result);
+		if (desc->vdesc.tx.callback_param)
+			trace_printk("desc[%d] %p desc->vdesc.tx.callback_param %p\n", i, (void*)desc, desc->vdesc.tx.callback_param);
+		
 	}
 
 	return 0;
@@ -198,6 +253,11 @@ static void init_descriptor(struct gpdma_desc *desc,
 
 	BUG_ON(src_count * (1<<src_acc) != len);
 	BUG_ON(dst_count * (1<<dst_acc) != len);
+
+#if 0
+	desc->vdesc.tx.callback_result = NULL;
+	desc->vdesc.tx.callback = NULL;
+#endif
 
 	desc->src = src;
 	desc->dst = dst;
@@ -275,6 +335,7 @@ static void gpdma_start(struct gpdma_channel *dmac)
 		return;
 	}
 
+	trace_printk("mb: rm from list and mark actrive\n");
 	/* Remove from list and mark as active */
 	list_del(&vdesc->node);
 	desc = to_gpdma_desc(vdesc);
@@ -335,6 +396,12 @@ static irqreturn_t gpdma_isr(int irqno, void *_dmac)
 	struct gpdma_desc    *desc = dmac->active;
 	u32                  status;
 	u32	             error;
+
+	
+	trace_printk("in isr before taking a decriptor\n");
+	trace_printk("desc->vdesc.tx.callback %p\n", desc->vdesc.tx.callback);
+	trace_printk("desc->vdesc.tx.callback_result %p\n", desc->vdesc.tx.callback_result);
+	trace_printk("desc->vdesc.tx.callback_param %p\n", desc->vdesc.tx.callback_param);
 
 	status = readl(dmac->base+DMA_STATUS);
 	error = status & DMA_STATUS_ERROR;
@@ -591,7 +658,21 @@ gpdma_prep_memcpy(struct dma_chan *chan,
 		src_acc = min(ffs((u32)src | len) - 1, 4);
 		dst_acc = min(ffs((u32)dst | len) - 1, 4);
 
+		if (new->vdesc.tx.callback)
+			trace_printk("new->vdesc.tx.callback %p\n", new->vdesc.tx.callback);
+		if (new->vdesc.tx.callback_result)
+			trace_printk("new->vdesc.tx.callback_result %p\n", new->vdesc.tx.callback_result);
+		if (new->vdesc.tx.callback_param)
+			trace_printk("new->vdesc.tx.callback_param %p\n", new->vdesc.tx.callback_param);
+
 		init_descriptor(new, src, src_acc, dst, dst_acc, len);
+
+		if (new->vdesc.tx.callback)
+			trace_printk("new->vdesc.tx.callback %p\n", new->vdesc.tx.callback);
+		if (new->vdesc.tx.callback_result)
+			trace_printk("new->vdesc.tx.callback_result %p\n", new->vdesc.tx.callback_result);
+		if (new->vdesc.tx.callback_param)
+			trace_printk("new->vdesc.tx.callback_param %p\n", new->vdesc.tx.callback_param);
 
 		if (!first) {
 			first = new;
@@ -729,6 +810,7 @@ static int gpdma_of_probe(struct platform_device *op)
 	/* Initialize dma_device struct */
 	dma = &engine->dma_device;
 	dma->dev = &op->dev;
+    pr_info("mb: dma engine %s\n", dev_name(dma->dev));
 	dma_cap_zero(dma->cap_mask);
 	dma_cap_set(DMA_MEMCPY, dma->cap_mask);
 	dma_cap_set(DMA_SG, dma->cap_mask);
