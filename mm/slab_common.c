@@ -37,7 +37,7 @@ struct kmem_cache *kmem_cache;
 		SLAB_TRACE | SLAB_DESTROY_BY_RCU | SLAB_NOLEAKTRACE | \
 		SLAB_FAILSLAB | SLAB_KASAN)
 
-#define SLAB_MERGE_SAME (SLAB_RECLAIM_ACCOUNT | SLAB_CACHE_DMA | \
+#define SLAB_MERGE_SAME (SLAB_RECLAIM_ACCOUNT | SLAB_CACHE_DMA | SLAB_CACHE_DMA32 | \
 			 SLAB_NOTRACK | SLAB_ACCOUNT)
 
 /*
@@ -819,6 +819,7 @@ struct kmem_cache *__init create_kmalloc_cache(const char *name, size_t size,
 				unsigned long flags)
 {
 	struct kmem_cache *s = kmem_cache_zalloc(kmem_cache, GFP_NOWAIT);
+	pr_info("mb: creating slab %s\n", name);
 
 	if (!s)
 		panic("Out of memory when creating slab %s\n", name);
@@ -835,6 +836,11 @@ EXPORT_SYMBOL(kmalloc_caches);
 #ifdef CONFIG_ZONE_DMA
 struct kmem_cache *kmalloc_dma_caches[KMALLOC_SHIFT_HIGH + 1];
 EXPORT_SYMBOL(kmalloc_dma_caches);
+#endif
+
+#ifdef CONFIG_ZONE_DMA32
+struct kmem_cache *kmalloc_dma32_caches[KMALLOC_SHIFT_HIGH + 1];
+EXPORT_SYMBOL(kmalloc_dma32_caches);
 #endif
 
 /*
@@ -900,6 +906,13 @@ struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 	if (unlikely((flags & GFP_DMA)))
 		return kmalloc_dma_caches[index];
 
+#endif
+#ifdef CONFIG_ZONE_DMA32
+	if (unlikely((flags & GFP_DMA32))) {
+		if (flags & GFP_DMA32)
+			pr_info("mb: %s(): %pGg\n", __func__, &flags);
+		return kmalloc_dma32_caches[index];
+	}
 #endif
 	return kmalloc_caches[index];
 }
@@ -1021,6 +1034,22 @@ void __init create_kmalloc_caches(unsigned long flags)
 			BUG_ON(!n);
 			kmalloc_dma_caches[i] = create_kmalloc_cache(n,
 				size, SLAB_CACHE_DMA | flags);
+		}
+	}
+#endif
+
+#ifdef CONFIG_ZONE_DMA32
+	for (i = 0; i <= KMALLOC_SHIFT_HIGH; i++) {
+		struct kmem_cache *s = kmalloc_caches[i];
+
+		if (s) {
+			int size = kmalloc_size(i);
+			char *n = kasprintf(GFP_NOWAIT,
+				 "dma32-kmalloc-%d", size);
+
+			BUG_ON(!n);
+			kmalloc_dma32_caches[i] = create_kmalloc_cache(n,
+				size, SLAB_CACHE_DMA32 | flags);
 		}
 	}
 #endif
