@@ -262,9 +262,9 @@ void __init setup_arch(char **cmdline_p)
 
 	xen_early_init();
 	efi_init();
-	arm64_memblock_init();
+	arm64_memblock_init(); /*mb:*/
 
-	paging_init();
+	paging_init(); /*mb:*/
 
 	acpi_table_upgrade();
 
@@ -274,7 +274,7 @@ void __init setup_arch(char **cmdline_p)
 	if (acpi_disabled)
 		unflatten_device_tree();
 
-	bootmem_init();
+	bootmem_init();/*mb:*/
 
 	kasan_init();
 

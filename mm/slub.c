@@ -2633,6 +2633,8 @@ new_slab:
 		goto redo;
 	}
 
+	if (gfpflags & GFP_DMA32)
+    	pr_info("mb: %s(): %pGg\n", __func__, &gfpflags);
 	freelist = new_slab_objects(s, gfpflags, node, &c);
 
 	if (unlikely(!freelist)) {
@@ -2699,6 +2701,9 @@ static __always_inline void *slab_alloc_node(struct kmem_cache *s,
 	struct kmem_cache_cpu *c;
 	struct page *page;
 	unsigned long tid;
+
+	if (gfpflags & GFP_DMA32)
+		pr_info("mb: %s(): %pGg\n", __func__, &gfpflags);
 
 	s = slab_pre_alloc_hook(s, gfpflags);
 	if (!s)
@@ -3579,6 +3584,9 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	if (s->flags & SLAB_CACHE_DMA)
 		s->allocflags |= GFP_DMA;
 
+	if (s->flags & SLAB_CACHE_DMA32)
+		s->allocflags |= GFP_DMA32;
+
 	if (s->flags & SLAB_RECLAIM_ACCOUNT)
 		s->allocflags |= __GFP_RECLAIMABLE;
 
@@ -3794,6 +3802,9 @@ void *__kmalloc(size_t size, gfp_t flags)
 {
 	struct kmem_cache *s;
 	void *ret;
+
+	if (flags & GFP_DMA32)
+    	pr_info("mb: %s(): %pGg\n", __func__, &flags);
 
 	if (unlikely(size > KMALLOC_MAX_CACHE_SIZE))
 		return kmalloc_large(size, flags);
@@ -5627,6 +5638,8 @@ static char *create_unique_id(struct kmem_cache *s)
 	 */
 	if (s->flags & SLAB_CACHE_DMA)
 		*p++ = 'd';
+	if (s->flags & SLAB_CACHE_DMA32)
+		*p++ = 'D';
 	if (s->flags & SLAB_RECLAIM_ACCOUNT)
 		*p++ = 'a';
 	if (s->flags & SLAB_CONSISTENCY_CHECKS)

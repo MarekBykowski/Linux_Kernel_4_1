@@ -463,9 +463,14 @@ static void __init map_kernel(pgd_t *pgd)
  * maps and sets up the zero page.
  */
 void __init paging_init(void)
+/*mb:*/
 {
+	unsigned long tmp;
 	phys_addr_t pgd_phys = early_pgtable_alloc();
 	pgd_t *pgd = pgd_set_fixmap(pgd_phys);
+
+	asm volatile("mrs %0, ttbr0_el1\n" : "=r" (tmp));
+	pr_info("mb: ttbr0_el1 %lx pgd %p pgd_phys %p\n", tmp, (void*) pgd, (void*) pgd_phys);
 
 	map_kernel(pgd);
 	map_mem(pgd);

@@ -523,7 +523,7 @@ asmlinkage __visible void __init start_kernel(void)
 	boot_cpu_state_init();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 
-	build_all_zonelists(NULL, NULL);
+	build_all_zonelists(NULL, NULL); /*mb: mn_init debug*/
 	page_alloc_init();
 
 	pr_notice("Kernel command line: %s\n", boot_command_line);

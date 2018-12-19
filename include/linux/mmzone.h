@@ -309,7 +309,7 @@ enum zone_type {
 	 */
 	ZONE_DMA,
 #endif
-#ifdef CONFIG_ZONE_DMA32
+#ifdef CONFIG_ZONE_DMA32 /*trying to enable this*/
 	/*
 	 * x86_64 needs two ZONE_DMAs because it supports devices that are
 	 * only able to do DMA to the lower 16M but also 32 bit devices that
