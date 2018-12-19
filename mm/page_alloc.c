@@ -2692,6 +2692,12 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 		local_lock_irqsave(pa_lock, flags);
 		do {
 			pcp = &this_cpu_ptr(zone->pageset)->pcp;
+			
+			if (gfp_flags & GFP_DMA32) {
+				pr_debug("mb: zone->name %s pcp->count %d, pcp->batch %d\n",
+						zone->name, pcp->count, pcp->batch);
+			}
+
 			list = &pcp->lists[migratetype];
 			if (list_empty(list)) {
 				pcp->count += rmqueue_bulk(zone, 0,
@@ -2722,11 +2728,20 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 			page = NULL;
 			if (alloc_flags & ALLOC_HARDER) {
 				page = __rmqueue_smallest(zone, order, MIGRATE_HIGHATOMIC);
-				if (page)
+				if (page) {
+					if (gfp_flags & GFP_DMA32) {
+						pr_debug("mb: %s()\n", __func__);
+					}
 					trace_mm_page_alloc_zone_locked(page, order, migratetype);
+				}
 			}
-			if (!page)
+			if (!page) {
 				page = __rmqueue(zone, order, migratetype);
+				if (gfp_flags & GFP_DMA32) {
+					pr_debug("mb: %s() zone->name %s order %u migratetype %d page %p\n", 
+					__func__, zone->name, order, migratetype, (void*)page);
+				}
+			}
 		} while (page && check_new_pages(page, order));
 		if (!page) {
 			spin_unlock(&zone->lock);
@@ -2970,6 +2985,11 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 	struct zoneref *z = ac->preferred_zoneref;
 	struct zone *zone;
 	struct pglist_data *last_pgdat_dirty_limit = NULL;
+	int i = 0;
+
+	if (gfp_mask & GFP_DMA32) {
+		pr_debug("mb: %s() %pGg\n", __func__, &gfp_mask);
+	}
 
 	/*
 	 * Scan zonelist, looking for a zone with enough free.
@@ -2984,6 +3004,17 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 			(alloc_flags & ALLOC_CPUSET) &&
 			!__cpuset_zone_allowed(zone, gfp_mask))
 				continue;
+
+		/* Skip DMA32 zone if GFP_DMA32 isn't passed */
+		if (strcmp(zone->name,"DMA32") == 0 &&
+			((gfp_mask & GFP_DMA32) == 0))
+				continue;
+
+		if (gfp_mask & GFP_DMA32) {
+			pr_debug("mb: %s() zone iterator %i\n", __func__, i++);
+			pr_debug("mb: %s() zone->name %s\n", __func__, zone->name);
+		}
+
 		/*
 		 * When allocating a page cache page for writing, we
 		 * want to get it from a node that is within its dirty
@@ -3013,21 +3044,47 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 			}
 		}
 
+		if (gfp_mask & GFP_DMA32) {
+			pr_debug("mb: %s() min_wmark_pages(z) %lu low_wmark_pages(z) %lu high_wmark_pages(z) %lu\n"
+					" alloc_flags 0x%x\n",
+					__func__,
+					min_wmark_pages(zone), low_wmark_pages(zone), high_wmark_pages(zone),
+					alloc_flags);
+		}
+
 		mark = zone->watermark[alloc_flags & ALLOC_WMARK_MASK];
 		if (!zone_watermark_fast(zone, order, mark,
 				       ac_classzone_idx(ac), alloc_flags)) {
 			int ret;
 
+			if (gfp_mask & GFP_DMA32) {
+				pr_debug("mb: %s() are you here ever? zone->name %s\n", __func__, zone->name);
+			}
 			/* Checked here to keep the fast path fast */
 			BUILD_BUG_ON(ALLOC_NO_WATERMARKS < NR_WMARK);
 			if (alloc_flags & ALLOC_NO_WATERMARKS)
 				goto try_this_zone;
 
+#undef node_reclaim_mode
+#define node_reclaim_mode 1
 			if (node_reclaim_mode == 0 ||
-			    !zone_allows_reclaim(ac->preferred_zoneref->zone, zone))
+			    !zone_allows_reclaim(ac->preferred_zoneref->zone, zone)) {
+				if (gfp_mask & GFP_DMA32) {
+					pr_debug("mb: %s() r u before continue? zone->name %s\n"
+							"node_reclaim_mode %d zone_allows_reclaim() returns %d\n",
+								 __func__, zone->name,
+								node_reclaim_mode,
+								zone_allows_reclaim(ac->preferred_zoneref->zone, zone)
+						   );
+				}
 				continue;
+			}
 
 			ret = node_reclaim(zone->zone_pgdat, gfp_mask, order);
+			if (gfp_mask & GFP_DMA32) {
+				pr_debug("mb: %s() zone->name %s ret %d\n", 
+							__func__, zone->name, ret);
+			}
 			switch (ret) {
 			case NODE_RECLAIM_NOSCAN:
 				/* did not scan */
@@ -3037,8 +3094,8 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 				continue;
 			default:
 				/* did we reclaim enough */
-				if (zone_watermark_ok(zone, order, mark,
-						ac_classzone_idx(ac), alloc_flags))
+				/*if (zone_watermark_ok(zone, order, mark,
+						ac_classzone_idx(ac), alloc_flags))*/
 					goto try_this_zone;
 
 				continue;
@@ -3046,6 +3103,12 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 		}
 
 try_this_zone:
+
+		if (gfp_mask & GFP_DMA32) {
+			pr_debug("mb: %s() ac->preferred_zoneref->zone->name %s ac->migratetype %d zone->name %s\n", 
+					__func__, ac->preferred_zoneref->zone->name, ac->migratetype, zone->name);
+		}
+
 		page = buffered_rmqueue(ac->preferred_zoneref->zone, zone, order,
 				gfp_mask, alloc_flags, ac->migratetype);
 		if (page) {
@@ -3829,11 +3892,15 @@ got_pg:
 /*
  * This is the 'heart' of the zoned buddy allocator.
  */
+/*mb: buddy allocator*/
 struct page *
 __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 			struct zonelist *zonelist, nodemask_t *nodemask)
 {
 	struct page *page;
+#if 0
+	static int once = 0;
+#endif
 	unsigned int alloc_flags = ALLOC_WMARK_LOW;
 	gfp_t alloc_mask = gfp_mask; /* The gfp_t that was actually used for allocation */
 	struct alloc_context ac = {
@@ -3842,6 +3909,24 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 		.nodemask = nodemask,
 		.migratetype = gfpflags_to_migratetype(gfp_mask),
 	};
+
+#if 0
+	if (once <= 100) {
+		once++;
+		pr_info("mb: show_mem\n");
+		show_mem(SHOW_MEM_FILTER_NODES);
+	}
+#endif
+	if (gfp_mask & GFP_DMA32) {
+		struct zone* z = zonelist_zone(zonelist->_zonerefs);
+		pr_debug("mb: %s() heart of buddyallocator: %pGg\n", __func__, &gfp_mask);
+		pr_debug("mb: %s() ac.high_zoneidx (dma32 is 1) %d\n", __func__, ac.high_zoneidx);
+		pr_debug("mb: %s() zonelist_zone(zonelist->_zonerefs)->name %s\n", __func__, z->name);
+		pr_debug("mb: %s() %s spanned_pages %lu in pages (in bytes 0x%lx) = zone_end_pfn - zone_start_pfn %lu(phys %lx)\n",
+				__func__, z->name,
+				z->spanned_pages, (unsigned long) PFN_PHYS(z->spanned_pages),
+				z->zone_start_pfn, (unsigned long) PFN_PHYS(z->zone_start_pfn));
+	}
 
 	if (cpusets_enabled()) {
 		alloc_mask |= __GFP_HARDWALL;
@@ -3880,6 +3965,12 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	 */
 	ac.preferred_zoneref = first_zones_zonelist(ac.zonelist,
 					ac.high_zoneidx, ac.nodemask);
+
+	if (gfp_mask & GFP_DMA32) {
+		pr_debug("mb: %s (ac.preferred_zoneref)->zone->name %s\n", 
+				__func__, (ac.preferred_zoneref)->zone->name);
+	}
+
 	if (!ac.preferred_zoneref->zone) {
 		page = NULL;
 		/*
@@ -5838,6 +5929,10 @@ static unsigned long __paginginit calc_memmap_size(unsigned long spanned_pages,
 	    IS_ENABLED(CONFIG_SPARSEMEM))
 		pages = present_pages;
 
+	pr_debug("mb: %s() pages %lu sizeof(struct page) %lu PAGE_SHIFT %lu\n"
+			" PAGE_ALIGN(pages * sizeof(struct page)) >> PAGE_SHIFT %lu\n",
+		__func__, pages, sizeof(struct page), (unsigned long) PAGE_SHIFT,
+		PAGE_ALIGN(pages * sizeof(struct page)) >> PAGE_SHIFT);
 	return PAGE_ALIGN(pages * sizeof(struct page)) >> PAGE_SHIFT;
 }
 
@@ -5883,6 +5978,9 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		size = zone->spanned_pages;
 		realsize = freesize = zone->present_pages;
 
+		printk(KERN_DEBUG "\nmb: freesize %lu\n",
+						   freesize); 
+
 		/*
 		 * Adjust freesize so that it accounts for how much memory
 		 * is used by this zone for memmap. This affects the watermark
@@ -5892,10 +5990,13 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		if (!is_highmem_idx(j)) {
 			if (freesize >= memmap_pages) {
 				freesize -= memmap_pages;
-				if (memmap_pages)
+				if (memmap_pages) {
 					printk(KERN_DEBUG
 					       "  %s zone: %lu pages used for memmap\n",
 					       zone_names[j], memmap_pages);
+					printk(KERN_DEBUG "mb: freesize -= memmap_pages %lu\n",
+						   freesize); 
+				}
 			} else
 				pr_warn("  %s zone: %lu pages exceeds freesize %lu\n",
 					zone_names[j], memmap_pages, freesize);
@@ -5904,8 +6005,10 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		/* Account for reserved pages */
 		if (j == 0 && freesize > dma_reserve) {
 			freesize -= dma_reserve;
-			printk(KERN_DEBUG "  %s zone: %lu pages reserved\n",
+			printk(KERN_INFO "  %s zone: %lu pages reserved\n",
 					zone_names[0], dma_reserve);
+			printk(KERN_DEBUG "mb: freesize -= dma_reserve %lu\n",
+					   freesize); 
 		}
 
 		if (!is_highmem_idx(j))
@@ -5921,6 +6024,8 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		 * And all highmem pages will be managed by the buddy system.
 		 */
 		zone->managed_pages = is_highmem_idx(j) ? realsize : freesize;
+		printk(KERN_DEBUG "mb: managed_pages = freesize %lu\n",
+					   freesize); 
 #ifdef CONFIG_NUMA
 		zone->node = nid;
 #endif
@@ -5938,6 +6043,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		ret = init_currently_empty_zone(zone, zone_start_pfn, size);
 		BUG_ON(ret);
 		memmap_init(size, nid, j, zone_start_pfn);
+		printk(KERN_DEBUG "mb:2 managed_pages %lu\n", zone->managed_pages); 
 	}
 }
 
@@ -6497,6 +6603,8 @@ void adjust_managed_page_count(struct page *page, long count)
 {
 	spin_lock(&managed_page_count_lock);
 	page_zone(page)->managed_pages += count;
+	/*pr_info("mb: %s() page_zone(page)->name %s  page_to_phys %lX \n",
+			__func__, page_zone(page)->name, (unsigned long)page_to_phys(page));*/
 	totalram_pages += count;
 #ifdef CONFIG_HIGHMEM
 	if (PageHighMem(page))

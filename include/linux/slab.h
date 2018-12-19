@@ -25,6 +25,7 @@
 #define SLAB_POISON		0x00000800UL	/* DEBUG: Poison objects */
 #define SLAB_HWCACHE_ALIGN	0x00002000UL	/* Align objs on cache lines */
 #define SLAB_CACHE_DMA		0x00004000UL	/* Use GFP_DMA memory */
+#define SLAB_CACHE_DMA32	0x00008000UL 	/* Use GFP_DMA32 memory */
 #define SLAB_STORE_USER		0x00010000UL	/* DEBUG: Store the last owner for bug hunting */
 #define SLAB_PANIC		0x00040000UL	/* Panic if kmem_cache_create() fails */
 /*
@@ -275,6 +276,9 @@ extern struct kmem_cache *kmalloc_caches[KMALLOC_SHIFT_HIGH + 1];
 #ifdef CONFIG_ZONE_DMA
 extern struct kmem_cache *kmalloc_dma_caches[KMALLOC_SHIFT_HIGH + 1];
 #endif
+#ifdef CONFIG_ZONE_DMA32
+extern struct kmem_cache *kmalloc_dma32_caches[KMALLOC_SHIFT_HIGH + 1];
+#endif
 
 /*
  * Figure out which kmalloc slab an allocation of a certain size
@@ -419,6 +423,10 @@ kmalloc_order_trace(size_t size, gfp_t flags, unsigned int order)
 static __always_inline void *kmalloc_large(size_t size, gfp_t flags)
 {
 	unsigned int order = get_order(size);
+
+	if (flags & GFP_DMA32)
+    	pr_debug("mb: %s(): %pGg\n", __func__, &flags);
+
 	return kmalloc_order_trace(size, flags, order);
 }
 
@@ -477,11 +485,19 @@ static __always_inline void *kmalloc_large(size_t size, gfp_t flags)
  */
 static __always_inline void *kmalloc(size_t size, gfp_t flags)
 {
+	if (flags & GFP_DMA32)
+    	pr_debug("mb: %s(): lineno %d %pGg\n", __func__, __LINE__, &flags);
+
 	if (__builtin_constant_p(size)) {
-		if (size > KMALLOC_MAX_CACHE_SIZE)
+		if (flags & GFP_DMA32)
+			pr_debug("mb: %s(): lineno %d %pGg\n", __func__, __LINE__, &flags);
+		if (size > KMALLOC_MAX_CACHE_SIZE) {
+			if (flags & GFP_DMA32)
+				pr_debug("mb: %s(): lineno %d %pGg\n", __func__, __LINE__, &flags);
 			return kmalloc_large(size, flags);
+		}
 #ifndef CONFIG_SLOB
-		if (!(flags & GFP_DMA)) {
+		if (!(flags & (GFP_DMA|GFP_DMA32))) {
 			int index = kmalloc_index(size);
 
 			if (!index)

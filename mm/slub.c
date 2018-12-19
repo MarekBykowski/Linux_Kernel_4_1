@@ -1410,8 +1410,11 @@ static inline struct page *alloc_slab_page(struct kmem_cache *s,
 
 	if (node == NUMA_NO_NODE)
 		page = alloc_pages(flags, order);
-	else
+	else {
+		if (flags & GFP_DMA32)
+			pr_info("mb5: %s(): %pGg\n", __func__, &flags);
 		page = __alloc_pages_node(node, flags, order);
+	}
 
 	if (page && memcg_charge_slab(page, flags, order, s)) {
 		__free_pages(page, order);
@@ -1558,6 +1561,9 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 	alloc_gfp = (flags | __GFP_NOWARN | __GFP_NORETRY) & ~__GFP_NOFAIL;
 	if ((alloc_gfp & __GFP_DIRECT_RECLAIM) && oo_order(oo) > oo_order(s->min))
 		alloc_gfp = (alloc_gfp | __GFP_NOMEMALLOC) & ~(__GFP_RECLAIM|__GFP_NOFAIL);
+
+	if (alloc_gfp & GFP_DMA32)
+    	pr_debug("mb: %s(): %pGg calls alloc_slab_page() \n", __func__, &alloc_gfp);
 
 	page = alloc_slab_page(s, alloc_gfp, node, oo);
 	if (unlikely(!page)) {
@@ -2633,6 +2639,8 @@ new_slab:
 		goto redo;
 	}
 
+	if (gfpflags & GFP_DMA32)
+    	pr_debug("mb: %s(): %pGg\n", __func__, &gfpflags);
 	freelist = new_slab_objects(s, gfpflags, node, &c);
 
 	if (unlikely(!freelist)) {
@@ -2699,6 +2707,9 @@ static __always_inline void *slab_alloc_node(struct kmem_cache *s,
 	struct kmem_cache_cpu *c;
 	struct page *page;
 	unsigned long tid;
+
+	if (gfpflags & GFP_DMA32)
+		pr_debug("mb: %s(): %pGg\n", __func__, &gfpflags);
 
 	s = slab_pre_alloc_hook(s, gfpflags);
 	if (!s)
@@ -3579,6 +3590,9 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	if (s->flags & SLAB_CACHE_DMA)
 		s->allocflags |= GFP_DMA;
 
+	if (s->flags & SLAB_CACHE_DMA32)
+		s->allocflags |= GFP_DMA32;
+
 	if (s->flags & SLAB_RECLAIM_ACCOUNT)
 		s->allocflags |= __GFP_RECLAIMABLE;
 
@@ -3794,6 +3808,10 @@ void *__kmalloc(size_t size, gfp_t flags)
 {
 	struct kmem_cache *s;
 	void *ret;
+
+	if (flags & GFP_DMA32) {
+    	pr_debug("mb: %s(): %pGg\n", __func__, &flags);
+	}
 
 	if (unlikely(size > KMALLOC_MAX_CACHE_SIZE))
 		return kmalloc_large(size, flags);
@@ -5627,6 +5645,8 @@ static char *create_unique_id(struct kmem_cache *s)
 	 */
 	if (s->flags & SLAB_CACHE_DMA)
 		*p++ = 'd';
+	if (s->flags & SLAB_CACHE_DMA32)
+		*p++ = 'D';
 	if (s->flags & SLAB_RECLAIM_ACCOUNT)
 		*p++ = 'a';
 	if (s->flags & SLAB_CONSISTENCY_CHECKS)
