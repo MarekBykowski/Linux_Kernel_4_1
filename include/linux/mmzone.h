@@ -288,6 +288,9 @@ struct per_cpu_nodestat {
 #endif /* !__GENERATING_BOUNDS.H */
 
 enum zone_type {
+#ifdef CONFIG_ZONE_L3LOCK
+	ZONE_L3LOCK,
+#endif
 #ifdef CONFIG_ZONE_DMA
 	/*
 	 * ZONE_DMA is used when there are devices that are not able

@@ -2168,6 +2168,8 @@ done:
 	cachep->allocflags = __GFP_COMP;
 	if (flags & SLAB_CACHE_DMA)
 		cachep->allocflags |= GFP_DMA;
+	if (flags & SLAB_CACHE_L3LOCK)
+		cachep->allocflags |= GFP_L3LOCK;
 	cachep->size = size;
 	cachep->reciprocal_buffer_size = reciprocal_value(size);
 

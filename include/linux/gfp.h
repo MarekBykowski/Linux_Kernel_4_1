@@ -41,6 +41,7 @@ struct vm_area_struct;
 #define ___GFP_OTHER_NODE	0x800000u
 #define ___GFP_WRITE		0x1000000u
 #define ___GFP_KSWAPD_RECLAIM	0x2000000u
+#define ___GFP_L3LOCK	0x4000000u
 /* If the above are modified, __GFP_BITS_SHIFT may need updating */
 
 /*
@@ -54,7 +55,8 @@ struct vm_area_struct;
 #define __GFP_HIGHMEM	((__force gfp_t)___GFP_HIGHMEM)
 #define __GFP_DMA32	((__force gfp_t)___GFP_DMA32)
 #define __GFP_MOVABLE	((__force gfp_t)___GFP_MOVABLE)  /* ZONE_MOVABLE allowed */
-#define GFP_ZONEMASK	(__GFP_DMA|__GFP_HIGHMEM|__GFP_DMA32|__GFP_MOVABLE)
+#define __GFP_L3LOCK  ((__force gfp_t)___GFP_L3LOCK)
+#define GFP_ZONEMASK	(__GFP_L3LOCK|__GFP_DMA|__GFP_HIGHMEM|__GFP_DMA32|__GFP_MOVABLE)
 
 /*
  * Page mobility and placement hints
@@ -187,7 +189,7 @@ struct vm_area_struct;
 #define __GFP_OTHER_NODE ((__force gfp_t)___GFP_OTHER_NODE)
 
 /* Room for N __GFP_FOO bits */
-#define __GFP_BITS_SHIFT 26
+#define __GFP_BITS_SHIFT 27
 #define __GFP_BITS_MASK ((__force gfp_t)((1 << __GFP_BITS_SHIFT) - 1))
 
 /*
@@ -254,6 +256,7 @@ struct vm_area_struct;
 #define GFP_USER	(__GFP_RECLAIM | __GFP_IO | __GFP_FS | __GFP_HARDWALL)
 #define GFP_DMA		__GFP_DMA
 #define GFP_DMA32	__GFP_DMA32
+#define GFP_L3LOCK __GFP_L3LOCK
 #define GFP_HIGHUSER	(GFP_USER | __GFP_HIGHMEM)
 #define GFP_HIGHUSER_MOVABLE	(GFP_HIGHUSER | __GFP_MOVABLE)
 #define GFP_TRANSHUGE_LIGHT	((GFP_HIGHUSER_MOVABLE | __GFP_COMP | \
@@ -381,6 +384,13 @@ static inline enum zone_type gfp_zone(gfp_t flags)
 
 	z = (GFP_ZONE_TABLE >> (bit * GFP_ZONES_SHIFT)) &
 					 ((1 << GFP_ZONES_SHIFT) - 1);
+
+	if (flags & GFP_L3LOCK) {
+		pr_info("mb: bit 0x%x GFP_ZONEMASK 0x%x GFP_ZONE_TABLE 0x%lx z 0x%x\n",
+				bit, GFP_ZONEMASK, (unsigned long) GFP_ZONE_TABLE, z);
+		z = 0;
+	}
+
 	VM_BUG_ON((GFP_ZONE_BAD >> bit) & 1);
 	return z;
 }
@@ -412,6 +422,21 @@ static inline int gfp_zonelist(gfp_t flags)
  */
 static inline struct zonelist *node_zonelist(int nid, gfp_t flags)
 {
+	if (flags & GFP_L3LOCK) {
+		struct zonelist *zonelist = &(NODE_DATA(nid)->node_zonelists[0]);
+		struct zone* z = zonelist_zone(zonelist->_zonerefs);	
+		int zoneid = zonelist_zone_idx(zonelist->_zonerefs);
+		pr_info("mb: %s() MAX_ZONELISTS %d MAX_ZONES_PER_ZONELIST %d\n",
+				__func__, MAX_ZONELISTS, MAX_ZONES_PER_ZONELIST);
+
+		pr_info("mb: %s() z->name %s zoneid %d\n",
+				__func__, z->name, zoneid);
+	#if 0
+		for_each_populated_zone(z) {
+			pr_info("mb: %s() z->name %s\n", __func__, z->name);
+		}
+	#endif
+	}
 	return NODE_DATA(nid)->node_zonelists + gfp_zonelist(flags);
 }
 
@@ -443,6 +468,9 @@ __alloc_pages_node(int nid, gfp_t gfp_mask, unsigned int order)
 	VM_BUG_ON(nid < 0 || nid >= MAX_NUMNODES);
 	VM_WARN_ON(!node_online(nid));
 
+	if (gfp_mask & GFP_L3LOCK)
+		pr_info("mb: %s(): nid %d order %u %pGg\n",
+			__func__, nid, order, &gfp_mask);
 	return __alloc_pages(gfp_mask, order, node_zonelist(nid, gfp_mask));
 }
 

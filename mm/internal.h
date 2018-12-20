@@ -34,7 +34,13 @@
 #define GFP_CONSTRAINT_MASK (__GFP_HARDWALL|__GFP_THISNODE)
 
 /* Do not use these with a slab allocator */
+#ifdef CONFIG_ZONE_DMA32
+#define GFP_SLAB_BUG_MASK (__GFP_HIGHMEM|~__GFP_BITS_MASK)
+#elif CONFIG_ZONE_L3LOCK
+#define GFP_SLAB_BUG_MASK (__GFP_HIGHMEM|~__GFP_BITS_MASK)
+#else
 #define GFP_SLAB_BUG_MASK (__GFP_DMA32|__GFP_HIGHMEM|~__GFP_BITS_MASK)
+#endif
 
 int do_swap_page(struct fault_env *fe, pte_t orig_pte);
 

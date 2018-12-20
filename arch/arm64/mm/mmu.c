@@ -404,6 +404,8 @@ static void __init map_kernel_segment(pgd_t *pgd, void *va_start, void *va_end,
 	phys_addr_t pa_start = __pa(va_start);
 	unsigned long size = va_end - va_start;
 
+	pr_info("mb: %s() pa_start %#llx va_start %#llx\n", 
+			__func__, (unsigned long long) pa_start, (unsigned long long) va_start);
 	BUG_ON(!PAGE_ALIGNED(pa_start));
 	BUG_ON(!PAGE_ALIGNED(size));
 
@@ -426,10 +428,14 @@ static void __init map_kernel(pgd_t *pgd)
 {
 	static struct vm_struct vmlinux_text, vmlinux_rodata, vmlinux_init, vmlinux_data;
 
+	pr_info("mb: %s() text\n", __func__);
 	map_kernel_segment(pgd, _text, _etext, PAGE_KERNEL_EXEC, &vmlinux_text);
+	pr_info("mb: %s() __start_rodata\n", __func__);
 	map_kernel_segment(pgd, __start_rodata, __init_begin, PAGE_KERNEL, &vmlinux_rodata);
+	pr_info("mb: %s() __init_begin\n", __func__);
 	map_kernel_segment(pgd, __init_begin, __init_end, PAGE_KERNEL_EXEC,
 			   &vmlinux_init);
+	pr_info("mb: %s() _data\n", __func__);
 	map_kernel_segment(pgd, _data, _end, PAGE_KERNEL, &vmlinux_data);
 
 	if (!pgd_val(*pgd_offset_raw(pgd, FIXADDR_START))) {
@@ -463,6 +469,7 @@ static void __init map_kernel(pgd_t *pgd)
  * maps and sets up the zero page.
  */
 void __init paging_init(void)
+/*mb:*/
 {
 	phys_addr_t pgd_phys = early_pgtable_alloc();
 	pgd_t *pgd = pgd_set_fixmap(pgd_phys);

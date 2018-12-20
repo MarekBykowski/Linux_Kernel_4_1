@@ -84,6 +84,7 @@ early_param("initrd", early_initrd);
 static phys_addr_t __init max_zone_dma_phys(void)
 {
 	phys_addr_t offset = memblock_start_of_DRAM() & GENMASK_ULL(63, 32);
+	pr_info("mb: %s() offset + (1ULL << 32) %lx\n", __func__, (unsigned long) (offset + (1ULL << 32)));
 	return min(offset + (1ULL << 32), memblock_end_of_DRAM());
 }
 
@@ -101,14 +102,23 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 }
 
 #else
-
+/*mb: we have UMA*/
+#include <linux/slab.h>
 static void __init zone_sizes_init(unsigned long min, unsigned long max)
 {
 	struct memblock_region *reg;
 	unsigned long zone_size[MAX_NR_ZONES], zhole_size[MAX_NR_ZONES];
-	unsigned long max_dma = min;
+	unsigned long max_dma = min, min_intact = min;
+#ifdef CONFIG_ZONE_L3LOCK
+	unsigned long max_l3lock;
+#endif
 
 	memset(zone_size, 0, sizeof(zone_size));
+
+#ifdef CONFIG_ZONE_L3LOCK
+	max_l3lock = PFN_DOWN(SZ_16M);
+	max_dma = min = zone_size[ZONE_L3LOCK] = max_l3lock - min;
+#endif
 
 	/* 4GB maximum for 32-bit only capable devices */
 #ifdef CONFIG_ZONE_DMA
@@ -117,6 +127,8 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 #endif
 	zone_size[ZONE_NORMAL] = max - max_dma;
 
+	pr_info("mb: memblock_start_of_DRAM %lx memblock_end_of_DRAM %lx\n", (unsigned long) memblock_start_of_DRAM(), (unsigned long) memblock_end_of_DRAM());
+	pr_info("mb: max %lu max_dma %lu zone_size[%d] %lu\n", max, max_dma, ZONE_NORMAL, zone_size[ZONE_NORMAL]);
 	memcpy(zhole_size, zone_size, sizeof(zhole_size));
 
 	for_each_memblock(memory, reg) {
@@ -125,6 +137,10 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 
 		if (start >= max)
 			continue;
+#ifdef CONFIG_ZONE_L3LOCK
+		zhole_size[ZONE_L3LOCK] = 0;
+		start += max_l3lock;
+#endif
 
 #ifdef CONFIG_ZONE_DMA
 		if (start < max_dma) {
@@ -137,9 +153,16 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 			unsigned long normal_start = max(start, max_dma);
 			zhole_size[ZONE_NORMAL] -= normal_end - normal_start;
 		}
+{
+		int i;
+		for (i=0; i<ARRAY_SIZE(zone_size); i++)
+			pr_info("mb: zone_size[%d] %lu zhole_size[%d] %lu\n",
+						i, zone_size[i], i, zhole_size[i]);
+		pr_info("mb: KMALLOC_MAX_CACHE_SIZE %lu\n", (unsigned long)KMALLOC_MAX_CACHE_SIZE);
+}
 	}
 
-	free_area_init_node(0, zone_size, min, zhole_size);
+	free_area_init_node(0, zone_size, min_intact, zhole_size);
 }
 
 #endif /* CONFIG_NUMA */
@@ -292,12 +315,13 @@ void __init arm64_memblock_init(void)
 	early_init_fdt_scan_reserved_mem();
 
 	/* 4GB maximum for 32-bit only capable devices */
-	if (IS_ENABLED(CONFIG_ZONE_DMA))
+	if (IS_ENABLED(CONFIG_ZONE_DMA)) {
 		arm64_dma_phys_limit = max_zone_dma_phys();
-	else
+		pr_info("mb: arm64_dma_phys_limit %lx\n", (unsigned long) arm64_dma_phys_limit);
+	} else
 		arm64_dma_phys_limit = PHYS_MASK + 1;
 	high_memory = __va(memblock_end_of_DRAM() - 1) + 1;
-	dma_contiguous_reserve(arm64_dma_phys_limit);
+	/*dma_contiguous_reserve(arm64_dma_phys_limit);*/
 
 	memblock_allow_resize();
 }

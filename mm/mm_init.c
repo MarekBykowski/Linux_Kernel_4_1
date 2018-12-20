@@ -15,12 +15,13 @@
 #include "internal.h"
 
 #ifdef CONFIG_DEBUG_MEMORY_INIT
-int __meminitdata mminit_loglevel;
+int __meminitdata mminit_loglevel = 4; /*log everthing*/
 
 #ifndef SECTIONS_SHIFT
 #define SECTIONS_SHIFT	0
 #endif
 
+#include "linux/slab.h"
 /* The zonelists are simply reported, validation is manual. */
 void __init mminit_verify_zonelist(void)
 {
@@ -44,6 +45,18 @@ void __init mminit_verify_zonelist(void)
 			listid = i / MAX_NR_ZONES;
 			zonelist = &pgdat->node_zonelists[listid];
 			zone = &pgdat->node_zones[zoneid];
+#if 1
+{			
+			pr_info("mb: %s: spanned_pages %lu in pages (0x%lx in bytes) = zone_end_pfn - zone_start_pfn %lu(phys %lx)\n"
+					" managed_pages %lu\n",
+					zone->name,
+					zone->spanned_pages, (unsigned long) PFN_PHYS(zone->spanned_pages),
+					zone->zone_start_pfn, (unsigned long) PFN_PHYS(zone->zone_start_pfn),
+					zone->managed_pages);
+
+			/*pr_info("mb: KMALLOC_MAX_CACHE_SIZE %lx\n", (unsigned long)KMALLOC_MAX_CACHE_SIZE);*/
+}
+#endif
 			if (!populated_zone(zone))
 				continue;
 

@@ -1410,8 +1410,12 @@ static inline struct page *alloc_slab_page(struct kmem_cache *s,
 
 	if (node == NUMA_NO_NODE)
 		page = alloc_pages(flags, order);
-	else
+	else {
+		if (flags & GFP_L3LOCK)
+			pr_info("mb: %s(): order %u %pGg\n",
+				__func__, order, &flags);
 		page = __alloc_pages_node(node, flags, order);
+	}
 
 	if (page && memcg_charge_slab(page, flags, order, s)) {
 		__free_pages(page, order);
@@ -1538,6 +1542,9 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 	bool shuffle;
 	bool enableirqs = false;
 
+	if (flags & GFP_L3LOCK)
+		pr_info("mb1: %s(): %pGg\n", __func__, &flags);
+
 	flags &= gfp_allowed_mask;
 
 	if (gfpflags_allow_blocking(flags))
@@ -1549,7 +1556,13 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 	if (enableirqs)
 		local_irq_enable();
 
+	if (flags & GFP_L3LOCK)
+		pr_info("mb2: %s(): %pGg\n", __func__, &flags);
+
 	flags |= s->allocflags;
+
+	if (flags & GFP_L3LOCK)
+		pr_info("mb3: %s(): %pGg\n", __func__, &flags);
 
 	/*
 	 * Let the initial higher-order allocation fail under memory pressure
@@ -1640,6 +1653,8 @@ static struct page *new_slab(struct kmem_cache *s, gfp_t flags, int node)
 {
 	if (unlikely(flags & GFP_SLAB_BUG_MASK)) {
 		gfp_t invalid_mask = flags & GFP_SLAB_BUG_MASK;
+		pr_info("mb: GFP_SLAB_BUG_MASK %#x __GFP_BITS_MASK %#x __GFP_L3LOCK %#x __GFP_HIGHMEM %#x\n",
+					GFP_SLAB_BUG_MASK, __GFP_BITS_MASK, __GFP_L3LOCK, __GFP_HIGHMEM);
 		flags &= ~GFP_SLAB_BUG_MASK;
 		pr_warn("Unexpected gfp: %#x (%pGg). Fixing up to gfp: %#x (%pGg). Fix your code!\n",
 				invalid_mask, &invalid_mask, flags, &flags);
@@ -2633,6 +2648,9 @@ new_slab:
 		goto redo;
 	}
 
+	if (gfpflags & GFP_L3LOCK)
+		pr_info("mb: %s(): %pGg\n", __func__, &gfpflags);
+
 	freelist = new_slab_objects(s, gfpflags, node, &c);
 
 	if (unlikely(!freelist)) {
@@ -2699,6 +2717,9 @@ static __always_inline void *slab_alloc_node(struct kmem_cache *s,
 	struct kmem_cache_cpu *c;
 	struct page *page;
 	unsigned long tid;
+
+	if (gfpflags & GFP_L3LOCK)
+		pr_info("mb: %s(): %pGg\n", __func__, &gfpflags);
 
 	s = slab_pre_alloc_hook(s, gfpflags);
 	if (!s)
@@ -3579,6 +3600,9 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	if (s->flags & SLAB_CACHE_DMA)
 		s->allocflags |= GFP_DMA;
 
+	if (s->flags & SLAB_CACHE_L3LOCK)
+		s->allocflags |= GFP_L3LOCK;
+
 	if (s->flags & SLAB_RECLAIM_ACCOUNT)
 		s->allocflags |= __GFP_RECLAIMABLE;
 
@@ -3794,6 +3818,9 @@ void *__kmalloc(size_t size, gfp_t flags)
 {
 	struct kmem_cache *s;
 	void *ret;
+
+	if (flags & GFP_L3LOCK)
+    	pr_info("mb: %s(): %pGg\n", __func__, &flags);
 
 	if (unlikely(size > KMALLOC_MAX_CACHE_SIZE))
 		return kmalloc_large(size, flags);
@@ -5627,6 +5654,8 @@ static char *create_unique_id(struct kmem_cache *s)
 	 */
 	if (s->flags & SLAB_CACHE_DMA)
 		*p++ = 'd';
+	if (s->flags & SLAB_CACHE_L3LOCK)
+		*p++ = 'L';
 	if (s->flags & SLAB_RECLAIM_ACCOUNT)
 		*p++ = 'a';
 	if (s->flags & SLAB_CONSISTENCY_CHECKS)

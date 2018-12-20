@@ -22,6 +22,7 @@
 	{(unsigned long)GFP_ATOMIC,		"GFP_ATOMIC"},		\
 	{(unsigned long)GFP_NOIO,		"GFP_NOIO"},		\
 	{(unsigned long)GFP_NOWAIT,		"GFP_NOWAIT"},		\
+	{(unsigned long)GFP_L3LOCK,		"GFP_L3LOCK"},		\
 	{(unsigned long)GFP_DMA,		"GFP_DMA"},		\
 	{(unsigned long)__GFP_HIGHMEM,		"__GFP_HIGHMEM"},	\
 	{(unsigned long)GFP_DMA32,		"GFP_DMA32"},		\
@@ -48,7 +49,7 @@
 	{(unsigned long)__GFP_RECLAIM,		"__GFP_RECLAIM"},	\
 	{(unsigned long)__GFP_DIRECT_RECLAIM,	"__GFP_DIRECT_RECLAIM"},\
 	{(unsigned long)__GFP_KSWAPD_RECLAIM,	"__GFP_KSWAPD_RECLAIM"},\
-	{(unsigned long)__GFP_OTHER_NODE,	"__GFP_OTHER_NODE"}	\
+	{(unsigned long)__GFP_OTHER_NODE,	"__GFP_OTHER_NODE"}\
 
 #define show_gfp_flags(flags)						\
 	(flags) ? __print_flags(flags, "|",				\

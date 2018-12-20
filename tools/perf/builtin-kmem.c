@@ -646,6 +646,7 @@ static const struct {
 	{ "__GFP_DIRECT_RECLAIM",	"DR" },
 	{ "__GFP_KSWAPD_RECLAIM",	"KR" },
 	{ "__GFP_OTHER_NODE",		"ON" },
+	{ "__GFP_L3LOCK",		"L3L" },
 };
 
 static size_t max_gfp_len;

@@ -569,6 +569,13 @@ config CPU_BIG_ENDIAN
        help
          Say Y if you plan on running a kernel in big-endian mode.
 
+config ZONE_L3LOCK
+	bool "Define L3 way-locking memory zone"
+	default y
+	help
+		This creates the pages to L3 way-locking memory range speeding
+		up the access for this memory being locked in L3 cache.
+
 config SCHED_MC
 	bool "Multi-core scheduler support"
 	help
