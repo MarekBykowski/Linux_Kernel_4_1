@@ -889,6 +889,9 @@ struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 {
 	int index;
 
+	if (flags & GFP_DMA32)
+		pr_info("mb: %s(): KMALLOC_MAX_SIZE %lu %pGg\n", __func__, KMALLOC_MAX_SIZE, &flags);
+
 	if (unlikely(size > KMALLOC_MAX_SIZE)) {
 		WARN_ON_ONCE(!(flags & __GFP_NOWARN));
 		return NULL;
@@ -909,8 +912,7 @@ struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 #endif
 #ifdef CONFIG_ZONE_DMA32
 	if (unlikely((flags & GFP_DMA32))) {
-		if (flags & GFP_DMA32)
-			pr_info("mb: %s(): %pGg\n", __func__, &flags);
+		pr_info("mb: %s(): %pGg\n", __func__, &flags);
 		return kmalloc_dma32_caches[index];
 	}
 #endif

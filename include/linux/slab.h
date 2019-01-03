@@ -486,14 +486,14 @@ static __always_inline void *kmalloc_large(size_t size, gfp_t flags)
 static __always_inline void *kmalloc(size_t size, gfp_t flags)
 {
 	if (flags & GFP_DMA32)
-    	pr_info("mb1: %s():%d %pGg\n", __func__, __LINE__, &flags);
+    	pr_info("mb1: %s(): lineno %d %pGg\n", __func__, __LINE__, &flags);
 
 	if (__builtin_constant_p(size)) {
 		if (flags & GFP_DMA32)
-			pr_info("mb2: %s():%d %pGg\n", __func__, __LINE__, &flags);
+			pr_info("mb2: %s(): lineno %d %pGg\n", __func__, __LINE__, &flags);
 		if (size > KMALLOC_MAX_CACHE_SIZE) {
 			if (flags & GFP_DMA32)
-				pr_info("mb3: %s():%d %pGg\n", __func__, __LINE__, &flags);
+				pr_info("mb3: %s(): lineno %d %pGg\n", __func__, __LINE__, &flags);
 			return kmalloc_large(size, flags);
 		}
 #ifndef CONFIG_SLOB
