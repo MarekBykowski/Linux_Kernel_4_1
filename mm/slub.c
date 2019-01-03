@@ -3803,8 +3803,9 @@ void *__kmalloc(size_t size, gfp_t flags)
 	struct kmem_cache *s;
 	void *ret;
 
-	if (flags & GFP_DMA32)
+	if (flags & GFP_DMA32) {
     	pr_info("mb: %s(): %pGg\n", __func__, &flags);
+	}
 
 	if (unlikely(size > KMALLOC_MAX_CACHE_SIZE))
 		return kmalloc_large(size, flags);

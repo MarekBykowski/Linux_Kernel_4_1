@@ -2996,6 +2996,11 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 			!__cpuset_zone_allowed(zone, gfp_mask))
 				continue;
 
+		/* Skip DMA32 zone if GFP_DMA32 isn't passed */
+		if (strcmp(zone->name,"DMA32") == 0 &&
+			((gfp_mask & GFP_DMA32) == 0))
+				continue;
+
 		if (gfp_mask & GFP_DMA32) {
 			pr_info("mb: %s() zone iterator %i\n", __func__, i++);
 			pr_info("mb: %s() zone->name %s\n", __func__, zone->name);
@@ -3033,7 +3038,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 		if (gfp_mask & GFP_DMA32) {
 			pr_info("mb: %s() zone->name %s\n"
 					" min_wmark_pages(z) %lu low_wmark_pages(z) %lu high_wmark_pages(z) %lu\n"
-					" alloc_flags 0x%x\n", 
+					" alloc_flags 0x%x\n",
 					__func__, zone->name,
 					min_wmark_pages(zone), low_wmark_pages(zone), high_wmark_pages(zone),
 					alloc_flags);
@@ -3059,9 +3064,9 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 				if (gfp_mask & GFP_DMA32) {
 					pr_info("mb: %s() r u before continue? zone->name %s\n"
 							"node_reclaim_mode %d zone_allows_reclaim() returns %d\n",
-								 __func__, zone->name, 
-								node_reclaim_mode, 
-								zone_allows_reclaim(ac->preferred_zoneref->zone, zone)	
+								 __func__, zone->name,
+								node_reclaim_mode,
+								zone_allows_reclaim(ac->preferred_zoneref->zone, zone)
 						   );
 				}
 				continue;
@@ -5916,6 +5921,10 @@ static unsigned long __paginginit calc_memmap_size(unsigned long spanned_pages,
 	    IS_ENABLED(CONFIG_SPARSEMEM))
 		pages = present_pages;
 
+	pr_info("mb: %s() pages %lu sizeof(struct page) %lu PAGE_SHIFT %lu\n"
+			" PAGE_ALIGN(pages * sizeof(struct page)) >> PAGE_SHIFT %lu\n",
+		__func__, pages, sizeof(struct page), (unsigned long) PAGE_SHIFT,
+		PAGE_ALIGN(pages * sizeof(struct page)) >> PAGE_SHIFT);
 	return PAGE_ALIGN(pages * sizeof(struct page)) >> PAGE_SHIFT;
 }
 
