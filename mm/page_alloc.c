@@ -2698,7 +2698,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 		local_lock_irqsave(pa_lock, flags);
 		do {
 			pcp = &this_cpu_ptr(zone->pageset)->pcp;
-			
+
 			if (gfp_flags & GFP_L3LOCK) {
 				pr_info("zone->name %s pcp->count %d, pcp->batch %d\n",
 						zone->name, pcp->count, pcp->batch);
@@ -3002,6 +3002,11 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 			!__cpuset_zone_allowed(zone, gfp_mask))
 				continue;
 
+		/* Skip L3LOCK zone if GFP_L3LOCK isn't passed */
+		if (strcmp(zone->name,"L3LOCK") == 0 &&
+			((gfp_mask & GFP_L3LOCK) == 0))
+				continue;
+
 		if (gfp_mask & GFP_L3LOCK) {
 			pr_info("mb: %s() zone iterator %i\n", __func__, i++);
 			pr_info("mb: %s() zone->name %s\n", __func__, zone->name);
@@ -3039,7 +3044,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 		if (gfp_mask & GFP_L3LOCK) {
 			pr_info("mb: %s() zone->name %s\n"
 					" min_wmark_pages(z) %lu low_wmark_pages(z) %lu high_wmark_pages(z) %lu\n"
-					" alloc_flags 0x%x\n", 
+					" alloc_flags 0x%x\n",
 					__func__, zone->name,
 					min_wmark_pages(zone), low_wmark_pages(zone), high_wmark_pages(zone),
 					alloc_flags);
@@ -3065,9 +3070,9 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 				if (gfp_mask & GFP_L3LOCK) {
 					pr_info("mb: %s() r u before continue? zone->name %s\n"
 							"node_reclaim_mode %d zone_allows_reclaim() returns %d\n",
-								 __func__, zone->name, 
-								node_reclaim_mode, 
-								zone_allows_reclaim(ac->preferred_zoneref->zone, zone)	
+								 __func__, zone->name,
+								node_reclaim_mode,
+								zone_allows_reclaim(ac->preferred_zoneref->zone, zone)
 						   );
 				}
 				continue;
@@ -3075,7 +3080,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 
 			ret = node_reclaim(zone->zone_pgdat, gfp_mask, order);
 			if (gfp_mask & GFP_L3LOCK) {
-				pr_info("mb: %s() zone->name %s ret %d\n", 
+				pr_info("mb: %s() zone->name %s ret %d\n",
 							__func__, zone->name, ret);
 			}
 			switch (ret) {
@@ -3098,7 +3103,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 try_this_zone:
 
 		if (gfp_mask & GFP_L3LOCK) {
-			pr_info("mb: %s() ac->preferred_zoneref->zone->name %s zone->name %s\n", 
+			pr_info("mb: %s() ac->preferred_zoneref->zone->name %s zone->name %s\n",
 					__func__, ac->preferred_zoneref->zone->name, zone->name);
 		}
 
@@ -3960,7 +3965,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 					ac.high_zoneidx, ac.nodemask);
 
 	if (gfp_mask & GFP_L3LOCK) {
-		pr_info("mb: %s (ac.preferred_zoneref)->zone->name %s\n", 
+		pr_info("mb: %s (ac.preferred_zoneref)->zone->name %s\n",
 				__func__, (ac.preferred_zoneref)->zone->name);
 	}
 
@@ -5922,6 +5927,10 @@ static unsigned long __paginginit calc_memmap_size(unsigned long spanned_pages,
 	    IS_ENABLED(CONFIG_SPARSEMEM))
 		pages = present_pages;
 
+	pr_info("mb: %s() pages %lu sizeof(struct page) %lu PAGE_SHIFT %lu\n"
+			" PAGE_ALIGN(pages * sizeof(struct page)) >> PAGE_SHIFT %lu\n",
+		__func__, pages, sizeof(struct page), (unsigned long) PAGE_SHIFT,
+		PAGE_ALIGN(pages * sizeof(struct page)) >> PAGE_SHIFT);
 	return PAGE_ALIGN(pages * sizeof(struct page)) >> PAGE_SHIFT;
 }
 
