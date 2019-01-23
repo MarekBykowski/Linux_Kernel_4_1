@@ -194,6 +194,9 @@ static struct notifier_block axxia_amba_nb = {
 	.notifier_call = axxia_bus_notifier,
 };
 
+void extern
+axxia_proc_create(void);
+
 void __init axxia_dt_init(void)
 {
 	base = ioremap(0x2010000000, 0x40000);
@@ -219,6 +222,8 @@ void __init axxia_dt_init(void)
 	axxia_ddr_retention_init();
 
 	platform_device_register(&pmu_device);
+	
+	axxia_proc_create();
 }
 
 static void axxia_restart(enum reboot_mode mode, const char *cmd)
