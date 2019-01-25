@@ -81,6 +81,7 @@ early_param("initrd", early_initrd);
  * currently assumes that for memory starting above 4G, 32-bit devices will
  * use a DMA offset.
  */
+static size_t l3lock_size = SZ_16M;
 static phys_addr_t __init max_zone_dma_phys(void)
 {
 	phys_addr_t arm64_dma_phys_limit;
@@ -88,7 +89,7 @@ static phys_addr_t __init max_zone_dma_phys(void)
 	phys_addr_t offset = memblock_start_of_DRAM() & GENMASK_ULL(63, 32);
 	pr_info("mb: %s() offset + (1ULL << 32) %lx\n", __func__, (unsigned long) (offset + (1ULL << 32)));
 	arm64_dma_phys_limit = min(offset + (1ULL << 32), memblock_end_of_DRAM());
-	return (arm64_dma_phys_limit -= SZ_16M);
+	return (arm64_dma_phys_limit -= l3lock_size);
 }
 
 #ifdef CONFIG_NUMA
@@ -121,7 +122,7 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 	zone_size[ZONE_DMA] = max_dma - min;
 #endif
 #ifdef CONFIG_ZONE_DMA32
-	max_dma32 = PFN_UP(arm64_dma_phys_limit + SZ_16M);
+	max_dma32 = PFN_UP(arm64_dma_phys_limit + l3lock_size);
 	zone_size[ZONE_DMA32] = max_dma32 - max_dma;
 #endif
 
