@@ -2728,11 +2728,20 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 			page = NULL;
 			if (alloc_flags & ALLOC_HARDER) {
 				page = __rmqueue_smallest(zone, order, MIGRATE_HIGHATOMIC);
-				if (page)
+				if (page) {
+					if (gfp_flags & GFP_DMA32) {
+						pr_info("mb11: %s()\n", __func__);
+					}
 					trace_mm_page_alloc_zone_locked(page, order, migratetype);
+				}
 			}
-			if (!page)
+			if (!page) {
 				page = __rmqueue(zone, order, migratetype);
+				if (gfp_flags & GFP_DMA32) {
+					pr_info("mb12: %s() zone->name %s order %u migratetype %d page %p\n", 
+					__func__, zone->name, order, migratetype, (void*)page);
+				}
+			}
 		} while (page && check_new_pages(page, order));
 		if (!page) {
 			spin_unlock(&zone->lock);
@@ -3036,10 +3045,9 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 		}
 
 		if (gfp_mask & GFP_DMA32) {
-			pr_info("mb: %s() zone->name %s\n"
-					" min_wmark_pages(z) %lu low_wmark_pages(z) %lu high_wmark_pages(z) %lu\n"
+			pr_info("mb: %s() min_wmark_pages(z) %lu low_wmark_pages(z) %lu high_wmark_pages(z) %lu\n"
 					" alloc_flags 0x%x\n",
-					__func__, zone->name,
+					__func__,
 					min_wmark_pages(zone), low_wmark_pages(zone), high_wmark_pages(zone),
 					alloc_flags);
 		}
@@ -3086,8 +3094,8 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 				continue;
 			default:
 				/* did we reclaim enough */
-				if (zone_watermark_ok(zone, order, mark,
-						ac_classzone_idx(ac), alloc_flags))
+				/*if (zone_watermark_ok(zone, order, mark,
+						ac_classzone_idx(ac), alloc_flags))*/
 					goto try_this_zone;
 
 				continue;
@@ -3097,8 +3105,8 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 try_this_zone:
 
 		if (gfp_mask & GFP_DMA32) {
-			pr_info("mb: %s() ac->preferred_zoneref->zone->name %s zone->name %s\n", 
-					__func__, ac->preferred_zoneref->zone->name, zone->name);
+			pr_info("mb: %s() ac->preferred_zoneref->zone->name %s ac->migratetype %d zone->name %s\n", 
+					__func__, ac->preferred_zoneref->zone->name, ac->migratetype, zone->name);
 		}
 
 		page = buffered_rmqueue(ac->preferred_zoneref->zone, zone, order,
