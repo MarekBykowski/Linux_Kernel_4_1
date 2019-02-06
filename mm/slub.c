@@ -1410,8 +1410,11 @@ static inline struct page *alloc_slab_page(struct kmem_cache *s,
 
 	if (node == NUMA_NO_NODE)
 		page = alloc_pages(flags, order);
-	else
+	else {
+		if (flags & GFP_DMA32)
+			pr_info("mb5: %s(): %pGg\n", __func__, &flags);
 		page = __alloc_pages_node(node, flags, order);
+	}
 
 	if (page && memcg_charge_slab(page, flags, order, s)) {
 		__free_pages(page, order);
@@ -1558,6 +1561,9 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 	alloc_gfp = (flags | __GFP_NOWARN | __GFP_NORETRY) & ~__GFP_NOFAIL;
 	if ((alloc_gfp & __GFP_DIRECT_RECLAIM) && oo_order(oo) > oo_order(s->min))
 		alloc_gfp = (alloc_gfp | __GFP_NOMEMALLOC) & ~(__GFP_RECLAIM|__GFP_NOFAIL);
+
+	if (alloc_gfp & GFP_DMA32)
+    	pr_info("mb: %s(): %pGg calls alloc_slab_page() \n", __func__, &alloc_gfp);
 
 	page = alloc_slab_page(s, alloc_gfp, node, oo);
 	if (unlikely(!page)) {

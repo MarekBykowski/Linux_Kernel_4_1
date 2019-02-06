@@ -912,7 +912,8 @@ struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 #endif
 #ifdef CONFIG_ZONE_DMA32
 	if (unlikely((flags & GFP_DMA32))) {
-		pr_info("mb: %s(): %pGg\n", __func__, &flags);
+		pr_info("mb: %s(): requested size %zu returns kmalloc_dma32_caches[%d] %pGg\n",
+			 __func__, size, index, &flags);
 		return kmalloc_dma32_caches[index];
 	}
 #endif
@@ -1043,6 +1044,9 @@ void __init create_kmalloc_caches(unsigned long flags)
 #ifdef CONFIG_ZONE_DMA32
 	for (i = 0; i <= KMALLOC_SHIFT_HIGH; i++) {
 		struct kmem_cache *s = kmalloc_caches[i];
+		if (s)
+			pr_info("mb: %s() kmalloc_caches[%d] %p name %s\n",
+					__func__, i, (void*) kmalloc_caches[i], kmalloc_caches[i]->name);
 
 		if (s) {
 			int size = kmalloc_size(i);
