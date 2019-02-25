@@ -19,6 +19,7 @@
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
  */
+#define DEBUG
 #include <linux/export.h>
 #include <linux/stat.h>
 #include <linux/module.h>
@@ -40,7 +41,7 @@
 #include "virt-dma.h"
 #include "lsi-dma32.h"
 
-#ifdef DEBUG
+#if defined(DEBUG) && 0
 #define engine_dbg(engine, fmt, ...) \
 	do { \
 		struct gpdma_engine *_e = engine; \
@@ -655,7 +656,7 @@ static int setup_channel(struct gpdma_channel *dmac, struct device_node *child)
 
 	/* Find the IRQ line, if it exists in the device tree */
 	dmac->irq = irq_of_parse_and_map(child, 0);
-	dev_dbg(engine->dev, "channel %d, irq %d\n", dmac->id, dmac->irq);
+	dev_dbg(engine->dev, "channel%d, irq %d\n", dmac->id, dmac->irq);
 	rc = devm_request_irq(engine->dev, dmac->irq, gpdma_isr, 0,
 			      "lsi-dma", dmac);
 	if (rc) {

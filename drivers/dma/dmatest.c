@@ -22,10 +22,19 @@
 #include <linux/slab.h>
 #include <linux/wait.h>
 
-static unsigned int test_buf_size = 16384;
+#define dmatest_dbg(on, fmt, ...) \
+	do { \
+		bool _on = !!(bool) on; \
+		if (_on) \
+			printk(KERN_INFO KBUILD_MODNAME ": " "[%s] " fmt, \
+				current->comm, ##__VA_ARGS__); \
+	} while (0)
+
+static unsigned int test_buf_size = /*16384*/6580;
 module_param(test_buf_size, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(test_buf_size, "Size of the memcpy test buffer");
 
+/*static char test_channel[20] = "dma0chan1";*/
 static char test_channel[20];
 module_param_string(channel, test_channel, sizeof(test_channel),
 		S_IRUGO | S_IWUSR);
@@ -36,7 +45,7 @@ module_param_string(device, test_device, sizeof(test_device),
 		S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(device, "Bus ID of the DMA Engine to test (default: any)");
 
-static unsigned int threads_per_chan = 1;
+static unsigned int threads_per_chan = 16;
 module_param(threads_per_chan, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(threads_per_chan,
 		"Number of threads to start per channel (default: 1)");
@@ -46,7 +55,7 @@ module_param(max_channels, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(max_channels,
 		"Maximum number of channels to use (default: all)");
 
-static unsigned int iterations;
+static unsigned int iterations = 10;
 module_param(iterations, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(iterations,
 		"Iterations before stopping test (default: infinite)");
@@ -56,10 +65,10 @@ module_param(sg_buffers, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(sg_buffers,
 		"Number of scatter gather buffers (default: 1)");
 
-static unsigned int dmatest;
+static unsigned int dmatest = 1;
 module_param(dmatest, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(dmatest,
-		"dmatest 0-memcpy 1-slave_sg (default: 0)");
+		"dmatest 0-memcpy 1-slave_sg (default: 1)");
 
 static unsigned int xor_sources = 3;
 module_param(xor_sources, uint, S_IRUGO | S_IWUSR);
@@ -84,6 +93,8 @@ static bool verbose;
 module_param(verbose, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(verbose, "Enable \"success\" result messages (default: off)");
 
+DEFINE_MUTEX(lock_bw);
+static unsigned long long bw_mbps_total;
 /**
  * struct dmatest_params - test parameters.
  * @buf_size:		size of the memcpy test buffer
@@ -134,7 +145,7 @@ static const struct kernel_param_ops run_ops = {
 	.set = dmatest_run_set,
 	.get = dmatest_run_get,
 };
-static bool dmatest_run;
+static bool dmatest_run = 1;
 module_param_cb(run, &run_ops, &dmatest_run, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(run, "Run the test (default: false)");
 
@@ -236,6 +247,7 @@ static bool dmatest_match_device(struct dmatest_params *params,
 	return strcmp(dev_name(device->dev), params->device) == 0;
 }
 
+__maybe_unused
 static unsigned long dmatest_random(void)
 {
 	unsigned long buf;
@@ -477,25 +489,28 @@ static int dmatest_func(void *data)
 	} else
 		goto err_thread_type;
 
-	thread->srcs = kcalloc(src_cnt+1, sizeof(u8 *), GFP_KERNEL);
+	thread->srcs = kcalloc(src_cnt+1, sizeof(u8 *), /*GFP_KERNEL*/GFP_DMA32);
 	if (!thread->srcs)
 		goto err_srcs;
 	for (i = 0; i < src_cnt; i++) {
-		thread->srcs[i] = kmalloc(params->buf_size, GFP_KERNEL);
+		thread->srcs[i] = kzalloc(params->buf_size, /*GFP_KERNEL*/GFP_DMA32);
 		if (!thread->srcs[i])
 			goto err_srcbuf;
 	}
 	thread->srcs[i] = NULL;
 
-	thread->dsts = kcalloc(dst_cnt+1, sizeof(u8 *), GFP_KERNEL);
+	thread->dsts = kcalloc(dst_cnt+1, sizeof(u8 *), /*GFP_KERNEL*/GFP_DMA32);
 	if (!thread->dsts)
 		goto err_dsts;
 	for (i = 0; i < dst_cnt; i++) {
-		thread->dsts[i] = kmalloc(params->buf_size, GFP_KERNEL);
+		thread->dsts[i] = kzalloc(params->buf_size, /*GFP_KERNEL*/GFP_DMA32);
 		if (!thread->dsts[i])
 			goto err_dstbuf;
 	}
 	thread->dsts[i] = NULL;
+
+	dmatest_dbg(0, "after kmalloc srcs[0] %X @ %p\n",
+			*(volatile unsigned*)thread->srcs[0], (void*) thread->srcs[0]);
 
 	set_user_nice(current, 10);
 
@@ -532,10 +547,16 @@ static int dmatest_func(void *data)
 			break;
 		}
 
+#define RANDOMIZE 0
 		if (params->noverify)
 			len = params->buf_size;
-		else
+		else {
+#if RANDOMIZE
 			len = dmatest_random() % params->buf_size + 1;
+#else
+			len = params->buf_size;
+#endif
+		}
 
 		len = (len >> align) << align;
 		if (!len)
@@ -548,8 +569,16 @@ static int dmatest_func(void *data)
 			dst_off = 0;
 		} else {
 			start = ktime_get();
+
+#if RANDOMIZE
+			dmatest_dbg(0, "randomize offsets\n");
 			src_off = dmatest_random() % (params->buf_size - len + 1);
 			dst_off = dmatest_random() % (params->buf_size - len + 1);
+#else
+			dmatest_dbg(0, "NOT randomize offsets\n");
+			src_off = 0;
+			dst_off = 0;
+#endif
 
 			src_off = (src_off >> align) << align;
 			dst_off = (dst_off >> align) << align;
@@ -563,8 +592,12 @@ static int dmatest_func(void *data)
 			filltime = ktime_add(filltime, diff);
 		}
 
+		dmatest_dbg(0, "before get_unmap srcs[0] %X @ %p\n",
+				*(volatile unsigned*)thread->srcs[0], (void*) thread->srcs[0]);
 		um = dmaengine_get_unmap_data(dev->dev, src_cnt+dst_cnt,
-					      GFP_KERNEL);
+					      /*GFP_KERNEL*/GFP_DMA32);
+		dmatest_dbg(0, "after get_unmap srcs[0] %X @ %p\n",
+				*(volatile unsigned*)thread->srcs[0], (void*) thread->srcs[0]);
 		if (!um) {
 			failed_tests++;
 			result("unmap data NULL", total_tests,
@@ -581,6 +614,10 @@ static int dmatest_func(void *data)
 			um->addr[i] = dma_map_page(dev->dev, pg, pg_off,
 						   um->len, DMA_TO_DEVICE);
 			srcs[i] = um->addr[i] + src_off;
+
+			dmatest_dbg(0, "srcs[%d] %X @ %p\n",
+					i, *(volatile unsigned*)thread->srcs[i], (void*) thread->srcs[i]);
+
 			ret = dma_mapping_error(dev->dev, um->addr[i]);
 			if (ret) {
 				dmaengine_unmap_put(um);
@@ -746,10 +783,20 @@ err_srcbuf:
 err_srcs:
 	kfree(pq_coefs);
 err_thread_type:
-	pr_info("%s: summary %u tests, %u failures %llu iops %llu KB/s (%d)\n",
+{
+	unsigned long long bw_mbps = dmatest_KBs(runtime, total_len)*8/1024;
+
+	pr_info("[%s] summary %u tests, %u failures %llu iops %llu KB/s (%llu Mb/s) buf_s %u (%d)\n",
 		current->comm, total_tests, failed_tests,
 		dmatest_persec(runtime, total_tests),
-		dmatest_KBs(runtime, total_len), ret);
+		dmatest_KBs(runtime, total_len), 
+		bw_mbps,
+		params->buf_size, ret);
+	
+	mutex_lock(&lock_bw);
+	bw_mbps_total += bw_mbps;
+	mutex_unlock(&lock_bw);
+}
 
 	/* terminate all transfers on specified channels */
 	if (ret || failed_tests)
@@ -850,12 +897,12 @@ static int dmatest_add_channel(struct dmatest_info *info,
 	dtc->chan = chan;
 	INIT_LIST_HEAD(&dtc->threads);
 
-	if (dma_has_cap(DMA_MEMCPY, dma_dev->cap_mask)) {
+	/*if (dma_has_cap(DMA_MEMCPY, dma_dev->cap_mask)) {
 		if (dmatest == 0) {
 			cnt = dmatest_add_threads(info, dtc, DMA_MEMCPY);
 			thread_count += cnt > 0 ? cnt : 0;
 		}
-	}
+	}*/
 
 	if (dma_has_cap(DMA_SG, dma_dev->cap_mask)) {
 		if (dmatest == 1) {
@@ -864,6 +911,7 @@ static int dmatest_add_channel(struct dmatest_info *info,
 		}
 	}
 
+/*
 	if (dma_has_cap(DMA_XOR, dma_dev->cap_mask)) {
 		cnt = dmatest_add_threads(info, dtc, DMA_XOR);
 		thread_count += cnt > 0 ? cnt : 0;
@@ -871,7 +919,7 @@ static int dmatest_add_channel(struct dmatest_info *info,
 	if (dma_has_cap(DMA_PQ, dma_dev->cap_mask)) {
 		cnt = dmatest_add_threads(info, dtc, DMA_PQ);
 		thread_count += cnt > 0 ? cnt : 0;
-	}
+	}*/
 
 	pr_info("Started %u threads using %s\n",
 		thread_count, dma_chan_name(chan));
@@ -915,6 +963,7 @@ static void request_channels(struct dmatest_info *info,
 		if (params->max_channels &&
 		    info->nr_channels >= params->max_channels)
 			break; /* we have all we need */
+		dmatest_dbg(0, "mb: using %s\n", dma_chan_name(chan));
 	}
 }
 
@@ -934,10 +983,10 @@ static void run_threaded_test(struct dmatest_info *info)
 	params->timeout = timeout;
 	params->noverify = noverify;
 
-	request_channels(info, DMA_MEMCPY);
-	request_channels(info, DMA_XOR);
+	/*request_channels(info, DMA_MEMCPY);
+	request_channels(info, DMA_XOR);*/
 	request_channels(info, DMA_SG);
-	request_channels(info, DMA_PQ);
+	/*request_channels(info, DMA_PQ);*/
 }
 
 static void stop_threaded_test(struct dmatest_info *info)
@@ -1027,6 +1076,7 @@ static int __init dmatest_init(void)
 	 * let userspace take over 'run' control
 	 */
 	info->did_init = true;
+	dmatest_dbg(1, "added\n");
 
 	return 0;
 }
@@ -1040,6 +1090,9 @@ static void __exit dmatest_exit(void)
 	mutex_lock(&info->lock);
 	stop_threaded_test(info);
 	mutex_unlock(&info->lock);
+
+	dmatest_dbg(1, "BW total %llu Mbps\n",  bw_mbps_total);
+	dmatest_dbg(1, "removed\n");
 }
 module_exit(dmatest_exit);
 
