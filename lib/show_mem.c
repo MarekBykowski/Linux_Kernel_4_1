@@ -38,7 +38,7 @@ void show_mem(unsigned int filter)
 
 	printk("%lu pages RAM\n", total);
 	printk("%lu pages HighMem/MovableOnly\n", highmem);
-	printk("%lu pages reserved\n", reserved);
+	printk("mb: %lu pages reserved\n", reserved);
 #ifdef CONFIG_CMA
 	printk("%lu pages cma reserved\n", totalcma_pages);
 #endif

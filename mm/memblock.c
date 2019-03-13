@@ -725,11 +725,13 @@ int __init_memblock memblock_free(phys_addr_t base, phys_addr_t size)
 
 int __init_memblock memblock_reserve(phys_addr_t base, phys_addr_t size)
 {
-	memblock_dbg("memblock_reserve: [%#016llx-%#016llx] flags %#02lx %pF\n",
+	/*memblock_db*/pr_info("memblock_reserve: [%#016llx-%#016llx] %#llx bytes flags %#02lx %pF\n",
 		     (unsigned long long)base,
 		     (unsigned long long)base + size - 1,
+			 size,
 		     0UL, (void *)_RET_IP_);
 
+	WARN(1,"mbmb:%pF()", (void*)_RET_IP_);
 	return memblock_add_range(&memblock.reserved, base, size, MAX_NUMNODES, 0);
 }
 
@@ -1462,12 +1464,13 @@ phys_addr_t __init_memblock memblock_start_of_DRAM(void)
 	return memblock.memory.regions[0].base;
 }
 
-phys_addr_t __init_memblock memblock_end_of_DRAM(void)
+phys_addr_t memblock_end_of_DRAM(void)
 {
 	int idx = memblock.memory.cnt - 1;
 
 	return (memblock.memory.regions[idx].base + memblock.memory.regions[idx].size);
 }
+EXPORT_SYMBOL(memblock_end_of_DRAM);
 
 static phys_addr_t __init_memblock __find_max_addr(phys_addr_t limit)
 {

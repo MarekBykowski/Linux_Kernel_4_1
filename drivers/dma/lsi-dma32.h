@@ -33,7 +33,7 @@
 #define DMA_SRC_ACCESS				0x14
 #define    DMA_SRC_ACCESS_BURST_TYPE		(1<<15)
 #define    DMA_SRC_ACCESS_TAIL_LENGTH(x)	(((x) & 0xF) << 11)
-#define    DMA_SRC_ACCESS_ROTATOR_LENGTH(x)	(((x) & 1F) << 6)
+#define    DMA_SRC_ACCESS_ROTATOR_LENGTH(x)	(((x) & 0x1F) << 6)
 #define    DMA_SRC_ACCESS_SRC_SIZE(x)		(((x) & 7) << 3)
 #define    DMA_SRC_ACCESS_SRC_BURST(x)		(((x) & 7) << 0)
 #define DMA_SRC_MASK				0x18

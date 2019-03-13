@@ -56,15 +56,22 @@
 		pr_debug("dma0ch%d: [%s] " fmt, \
 			dmac->id, __func__, ##__VA_ARGS__); \
 	} while (0)
+#define mb_dbg(fmt, ...) pr_debug("%s() " fmt, __func__);
 #else
 #define engine_dbg(engine, fmt, ...) do {} while (0)
 #define ch_dbg(dmac, fmt, ...)       do {} while (0)
+#define mb_dbg(fmt, ...)       do {} while (0)
 #endif
 
-static unsigned int burst = 5;
+static unsigned int burst = 7;
 module_param(burst, uint, 0644);
 MODULE_PARM_DESC(burst,
 		 "Preferred burst setting (0=SINGLE,3=INCR4,5=INCR8,7=INCR16)");
+
+static bool rif_mode = true;
+module_param(rif_mode, bool, 0644);
+MODULE_PARM_DESC(rif_mode,
+		"Set rif_mode optimized towards rif");
 
 static void reset_channel(struct gpdma_channel *dmac)
 {
@@ -191,13 +198,20 @@ static struct gpdma_desc *get_descriptor(struct gpdma_engine *engine)
 static void init_descriptor(struct gpdma_desc *desc,
 			    dma_addr_t src, u32 src_acc,
 			    dma_addr_t dst, u32 dst_acc,
-			    size_t len)
+			    size_t len, size_t tail_length)
 {
-	u32 src_count = len >> src_acc;
-	u32 dst_count = len >> dst_acc;
-	u32 rot_len = (2 * (1 << src_acc)) - 1;
+	u32 src_count, dst_count, rot_len;
 
-	BUG_ON(src_count * (1<<src_acc) != len);
+	src_count = (len + tail_length) >> src_acc;
+	dst_count = len >> dst_acc;
+	rot_len = (2 * (1 << src_acc)) - 1;
+
+	mb_dbg("mb: src_count = %u len %zu >> src_acc %u (4 -> 16 bytes) + 1\n",
+				src_count, len, src_acc);
+	mb_dbg("mb: dst_acc %u dst_count %u\n", dst_acc, dst_count);
+	mb_dbg("mb: rot_len %u src_x_mod %u\n", rot_len, 1 << src_acc);
+
+	BUG_ON(src_count * (1<<src_acc) != (len + tail_length));
 	BUG_ON(dst_count * (1<<dst_acc) != len);
 
 	desc->src = src;
@@ -209,11 +223,14 @@ static void init_descriptor(struct gpdma_desc *desc,
 	desc->hw.src_y_mod     = 0;
 	desc->hw.src_addr      = cpu_to_le32(src & 0xffffffff);
 	desc->hw.src_data_mask = ~0;
-	desc->hw.src_access    = cpu_to_le16((rot_len << 6) |
-					    (src_acc << 3) |
-					    (burst & 7));
-	desc->hw.dst_access    = cpu_to_le16((dst_acc << 3) |
-					    (burst & 7));
+	desc->hw.src_access    = cpu_to_le16(
+			DMA_SRC_ACCESS_TAIL_LENGTH(tail_length) |
+			DMA_SRC_ACCESS_ROTATOR_LENGTH(rot_len) |
+			DMA_SRC_ACCESS_SRC_SIZE(src_acc) |
+			DMA_SRC_ACCESS_SRC_BURST(burst));
+	desc->hw.dst_access    = cpu_to_le16(
+			DMA_DST_ACCESS_DST_SIZE(dst_acc) |
+			DMA_DST_ACCESS_DST_BURST(burst));
 	desc->hw.ch_config     = cpu_to_le32(DMA_CONFIG_ONE_SHOT(1));
 	desc->hw.next_ptr      = 0;
 	desc->hw.dst_x_ctr     = cpu_to_le16(dst_count - 1);
@@ -221,6 +238,22 @@ static void init_descriptor(struct gpdma_desc *desc,
 	desc->hw.dst_x_mod     = cpu_to_le32(1 << dst_acc);
 	desc->hw.dst_y_mod     = 0;
 	desc->hw.dst_addr      = cpu_to_le32(dst & 0xffffffff);
+
+#if 1
+{
+	u16 temp = (desc->hw.src_access >> 3) & 0x7;
+	if (temp != 0x4)
+		pr_warn_once("mb: %s() src_access %02X (NOT OPTIMIZED)\n",
+				 __func__, temp);
+	temp = (desc->hw.dst_access >> 3) & 0x7;
+	if (temp != 0x4)
+		pr_warn_once("mb: %s() dts_access %02X (NOT OPTIMIZED)\n",
+				 __func__, temp);
+	if (burst != 7)
+		pr_warn_once("mb: %s() burst size %02X (NOT OPTIMIZED)", __func__, burst);
+}
+#endif
+
 }
 
 static phys_addr_t desc_to_paddr(const struct gpdma_channel *dmac,
@@ -472,7 +505,7 @@ gpdma_prep_sg(struct dma_chan *chan,
 	size_t dst_avail, src_avail;
 	dma_addr_t dst, src;
 	u32 src_acc, dst_acc;
-	size_t len;
+	size_t len, tail_length;
 
 	if (dst_nents == 0 || src_nents == 0)
 		return NULL;
@@ -489,13 +522,20 @@ gpdma_prep_sg(struct dma_chan *chan,
 		len = min_t(size_t, src_avail, dst_avail);
 		len = min_t(size_t, len, (size_t)SZ_64K);
 
+		if (rif_mode && len % 16) {
+			tail_length = 16 - (len % 16);
+			mb_dbg("mb: tail_length %u\n", tail_length);
+		} else 
+			tail_length = 0;
+			
+
 		if (len > 0) {
 			dst = sg_dma_address(dst_sg) +
 				sg_dma_len(dst_sg) - dst_avail;
 			src = sg_dma_address(src_sg) +
 				sg_dma_len(src_sg) - src_avail;
 
-			src_acc = min(ffs((u32)src | len) - 1, 4);
+			src_acc = min(ffs((u32)src | (len + tail_length)) - 1, 4);
 			dst_acc = min(ffs((u32)dst | len) - 1, 4);
 
 			new = get_descriptor(dmac->engine);
@@ -504,7 +544,10 @@ gpdma_prep_sg(struct dma_chan *chan,
 				goto fail;
 			}
 
-			init_descriptor(new, src, src_acc, dst, dst_acc, len);
+			mb_dbg("mb: src %pa src_acc %u len + tail_length %zu tail_length %u src_count %zu\n",
+						&src, src_acc, len + tail_length, tail_length, len >> 4);
+
+			init_descriptor(new, src, src_acc, dst, dst_acc, len, tail_length);
 
 			/* Link descriptors together */
 			if (!first) {
@@ -574,7 +617,7 @@ gpdma_prep_memcpy(struct dma_chan *chan,
 	struct gpdma_channel *dmac = to_gpdma_chan(chan);
 	struct gpdma_desc *first = NULL, *prev = NULL, *new;
 	u32 src_acc, dst_acc;
-	size_t len;
+	size_t len, tail_length;
 
 	if (size == 0)
 		return NULL;
@@ -587,12 +630,21 @@ gpdma_prep_memcpy(struct dma_chan *chan,
 		}
 
 		len = min_t(size_t, size, (size_t)SZ_64K);
+		if (rif_mode && len % 16) {
+			tail_length = 16 - (len % 16);
+			mb_dbg("mb: tail_length %u\n", tail_length);
+		} else
+			tail_length = 0;
 
 		/* Maximize access width based on address and length alignmet */
-		src_acc = min(ffs((u32)src | len) - 1, 4);
+		/* 4(0b100) is the max 16 byte src/dst access size*/
+		src_acc = min(ffs((u32)src | (len + tail_length)) - 1, 4);
 		dst_acc = min(ffs((u32)dst | len) - 1, 4);
 
-		init_descriptor(new, src, src_acc, dst, dst_acc, len);
+		mb_dbg("mb: src %pa src_acc %u len + tail_length %zu tail_length %u src_count %zu\n",
+						&src, src_acc, len + tail_length, tail_length, len >> 4);
+
+		init_descriptor(new, src, src_acc, dst, dst_acc, len, tail_length);
 
 		if (!first) {
 			first = new;

@@ -53,7 +53,7 @@
  */
 #define IO_TLB_MIN_SLABS ((1<<20) >> IO_TLB_SHIFT)
 
-enum swiotlb_force swiotlb_force;
+enum swiotlb_force swiotlb_force; 
 
 /*
  * Used to do a quick range check in swiotlb_tbl_unmap_single and
@@ -125,7 +125,8 @@ unsigned long swiotlb_nr_tbl(void)
 EXPORT_SYMBOL_GPL(swiotlb_nr_tbl);
 
 /* default to 64MB */
-#define IO_TLB_DEFAULT_SIZE (64UL<<20)
+/*#define IO_TLB_DEFAULT_SIZE (64UL<<20)*/
+#define IO_TLB_DEFAULT_SIZE (1UL<<20) /*changed to 1M*/
 unsigned long swiotlb_size_or_default(void)
 {
 	unsigned long size;

@@ -819,7 +819,7 @@ struct kmem_cache *__init create_kmalloc_cache(const char *name, size_t size,
 				unsigned long flags)
 {
 	struct kmem_cache *s = kmem_cache_zalloc(kmem_cache, GFP_NOWAIT);
-	pr_info("mb: creating slab %s\n", name);
+	pr_debug("mb: creating slab %s\n", name);
 
 	if (!s)
 		panic("Out of memory when creating slab %s\n", name);
@@ -890,7 +890,7 @@ struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 	int index;
 
 	if (flags & GFP_DMA32)
-		pr_info("mb: %s(): KMALLOC_MAX_SIZE %lu %pGg\n", __func__, KMALLOC_MAX_SIZE, &flags);
+		pr_debug("mb: %s(): KMALLOC_MAX_SIZE %lu %pGg\n", __func__, KMALLOC_MAX_SIZE, &flags);
 
 	if (unlikely(size > KMALLOC_MAX_SIZE)) {
 		WARN_ON_ONCE(!(flags & __GFP_NOWARN));
@@ -912,7 +912,7 @@ struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 #endif
 #ifdef CONFIG_ZONE_DMA32
 	if (unlikely((flags & GFP_DMA32))) {
-		pr_info("mb: %s(): requested size %zu returns kmalloc_dma32_caches[%d] %pGg\n",
+		pr_debug("mb: %s(): requested size %zu returns kmalloc_dma32_caches[%d] %pGg\n",
 			 __func__, size, index, &flags);
 		return kmalloc_dma32_caches[index];
 	}
@@ -1045,7 +1045,7 @@ void __init create_kmalloc_caches(unsigned long flags)
 	for (i = 0; i <= KMALLOC_SHIFT_HIGH; i++) {
 		struct kmem_cache *s = kmalloc_caches[i];
 		if (s)
-			pr_info("mb: %s() kmalloc_caches[%d] %p name %s\n",
+			pr_debug("mb: %s() kmalloc_caches[%d] %p name %s\n",
 					__func__, i, (void*) kmalloc_caches[i], kmalloc_caches[i]->name);
 
 		if (s) {

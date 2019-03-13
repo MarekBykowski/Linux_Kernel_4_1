@@ -22,20 +22,110 @@
 #include <linux/slab.h>
 #include <linux/wait.h>
 
-#define dmatest_dbg(on, fmt, ...) \
+static int dmatest_loglevel = 1;
+#define dmatest_dbg(level, fmt, ...) \
 	do { \
-		bool _on = !!(bool) on; \
-		if (_on) \
+		if (level >  dmatest_loglevel) \
 			printk(KERN_INFO KBUILD_MODNAME ": " "[%s] " fmt, \
 				current->comm, ##__VA_ARGS__); \
 	} while (0)
 
-static unsigned int test_buf_size = /*16384*/6580;
+#define RUN_SG 1
+static unsigned int test_buf_size = 6580; /*multiple of 16 bytes =6592;*/
+/*16384*/ /*6580  8192*/
 module_param(test_buf_size, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(test_buf_size, "Size of the memcpy test buffer");
 
-/*static char test_channel[20] = "dma0chan1";*/
-static char test_channel[20];
+static unsigned int sg_buffers = 1;
+static unsigned int iterations = 1000;
+
+static int dmatest_lock_set(const char *val, const struct kernel_param *kp);
+static const struct kernel_param_ops lock_ops = {
+	.set = dmatest_lock_set,
+	/*.set = param_set_charp,*/
+	.get = param_get_charp,
+};
+static char* l3_locking = "l3_lock_to_l3_unlock";
+module_param_cb(lock, &lock_ops, &l3_locking, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(lock, "locking l3");
+static int dmatest_lock_set(const char *val, const struct kernel_param *kp)
+{
+	char *s = strstrip((char *)val);
+	int ret = param_set_charp(s, kp);
+
+	if (ret)
+		return ret;
+
+	strcpy(l3_locking,s);
+	dmatest_dbg(0, "setting %s\n", l3_locking);
+
+	return ret;
+}
+
+enum _direction {
+	SRC,
+	DEST
+} dir;
+
+void* _kcalloc(size_t n, size_t size, enum _direction dir)
+{
+	void* temp = NULL;
+	
+	if (!strncmp(l3_locking,"l3_lock_to_l3_lock", sizeof("l3_lock_to_l3_lock")) && (dir == SRC))
+		temp = kcalloc(n, size, GFP_DMA32);
+	else if (!strncmp(l3_locking,"l3_lock_to_l3_unlock", sizeof("l3_lock_to_l3_unlock")) && (dir == SRC))
+		temp = kcalloc(n, size, GFP_DMA32);
+	else if (!strncmp(l3_locking,"l3_unlock_to_l3_unlock", sizeof("l3_unlock_to_l3_unlock")) && (dir == SRC))
+		temp = kcalloc(n, size, GFP_KERNEL);
+	else if (!strncmp(l3_locking,"l3_lock_to_l3_lock", sizeof("l3_lock_to_l3_lock")) && (dir == DEST))
+		temp = kcalloc(n, size, GFP_DMA32);
+	else if (!strncmp(l3_locking,"l3_lock_to_l3_unlock", sizeof("l3_lock_to_l3_unlock")) && (dir == DEST))
+		temp = kcalloc(n, size, GFP_KERNEL);
+	else if (!strncmp(l3_locking,"l3_unlock_to_l3_unlock", sizeof("l3_unlock_to_l3_unlock")) && (dir == DEST))
+		temp = kcalloc(n, size, GFP_KERNEL);
+	
+	return temp;
+}
+
+void* _kzalloc(size_t s, enum _direction dir)
+{
+	void* temp = NULL;
+
+	if (!strncmp(l3_locking,"l3_lock_to_l3_lock", sizeof("l3_lock_to_l3_lock")) && (dir == SRC))
+		temp = kzalloc(s, GFP_DMA32);
+	else if (!strncmp(l3_locking,"l3_lock_to_l3_unlock", sizeof("l3_lock_to_l3_unlock")) && (dir == SRC))
+		temp = kzalloc(s, GFP_DMA32);
+	else if (!strncmp(l3_locking,"l3_unlock_to_l3_unlock", sizeof("l3_unlock_to_l3_unlock")) && (dir == SRC))
+		temp = kzalloc(s, GFP_KERNEL);
+	else if (!strncmp(l3_locking,"l3_lock_to_l3_lock", sizeof("l3_lock_to_l3_lock")) && (dir == DEST))
+		temp = kzalloc(s, GFP_DMA32);
+	else if (!strncmp(l3_locking,"l3_lock_to_l3_unlock", sizeof("l3_lock_to_l3_unlock")) && (dir == DEST))
+		temp = kzalloc(s, GFP_KERNEL);
+	else if (!strncmp(l3_locking,"l3_unlock_to_l3_unlock", sizeof("l3_unlock_to_l3_unlock")) && (dir == DEST))
+		temp = kzalloc(s, GFP_KERNEL);
+
+	return temp;
+}
+
+struct dmaengine_unmap_data* _dmaengine_get_unmap_data(struct device *dev, int nr)
+{
+	struct dmaengine_unmap_data* temp; 
+
+	if (
+		(!strncmp(l3_locking,"l3_lock_to_l3_lock", sizeof("l3_lock_to_l3_lock"))) ||
+			(!strncmp(l3_locking,"l3_lock_to_l3_unlock", sizeof("l3_lock_to_l3_unlock")))
+	   )
+		temp = dmaengine_get_unmap_data(dev, nr, GFP_DMA32);
+	else
+		temp = dmaengine_get_unmap_data(dev, nr, GFP_KERNEL);
+
+	return temp;
+}
+
+
+
+static char test_channel[20] = "dma0chan1";
+/*static char test_channel[20];*/
 module_param_string(channel, test_channel, sizeof(test_channel),
 		S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(channel, "Bus ID of the channel to test (default: any)");
@@ -45,7 +135,11 @@ module_param_string(device, test_device, sizeof(test_device),
 		S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(device, "Bus ID of the DMA Engine to test (default: any)");
 
+#if RUN_SG
+static unsigned int threads_per_chan = 1;
+#else
 static unsigned int threads_per_chan = 16;
+#endif
 module_param(threads_per_chan, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(threads_per_chan,
 		"Number of threads to start per channel (default: 1)");
@@ -55,17 +149,19 @@ module_param(max_channels, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(max_channels,
 		"Maximum number of channels to use (default: all)");
 
-static unsigned int iterations = 10;
 module_param(iterations, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(iterations,
 		"Iterations before stopping test (default: infinite)");
 
-static unsigned int sg_buffers = 1;
 module_param(sg_buffers, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(sg_buffers,
 		"Number of scatter gather buffers (default: 1)");
 
+#if RUN_SG
 static unsigned int dmatest = 1;
+#else
+static unsigned int dmatest;
+#endif
 module_param(dmatest, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(dmatest,
 		"dmatest 0-memcpy 1-slave_sg (default: 1)");
@@ -93,8 +189,12 @@ static bool verbose;
 module_param(verbose, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(verbose, "Enable \"success\" result messages (default: off)");
 
+static unsigned int bw_mbps_total;
+module_param(bw_mbps_total, uint, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(bw_mbps_total,
+		"Total BW from threaded test");
+
 DEFINE_MUTEX(lock_bw);
-static unsigned long long bw_mbps_total;
 /**
  * struct dmatest_params - test parameters.
  * @buf_size:		size of the memcpy test buffer
@@ -145,7 +245,7 @@ static const struct kernel_param_ops run_ops = {
 	.set = dmatest_run_set,
 	.get = dmatest_run_get,
 };
-static bool dmatest_run = 1;
+static bool dmatest_run = false;
 module_param_cb(run, &run_ops, &dmatest_run, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(run, "Run the test (default: false)");
 
@@ -195,7 +295,7 @@ struct dmatest_chan {
 };
 
 static DECLARE_WAIT_QUEUE_HEAD(thread_wait);
-static bool wait;
+static bool wait = true;
 
 static bool is_threaded_test_run(struct dmatest_info *info)
 {
@@ -218,8 +318,12 @@ static int dmatest_wait_get(char *val, const struct kernel_param *kp)
 	struct dmatest_info *info = &test_info;
 	struct dmatest_params *params = &info->params;
 
-	if (params->iterations)
+	if (params->iterations) {
 		wait_event(thread_wait, !is_threaded_test_run(info));
+		dmatest_dbg(1, "Threaded test completed\n");
+		dmatest_dbg(1, "L3:%s TYPE:%s BUF_SIZE:%u ITERS:%u => BW total %u Mbps\n", __stringify(TEST_USES),
+				RUN_SG ? "DMA_SG" : "DMA_COPY", test_buf_size, iterations, bw_mbps_total);
+	}
 	wait = true;
 	return param_get_bool(val, kp);
 }
@@ -229,7 +333,7 @@ static const struct kernel_param_ops wait_ops = {
 	.set = param_set_bool,
 };
 module_param_cb(wait, &wait_ops, &wait, S_IRUGO);
-MODULE_PARM_DESC(wait, "Wait for tests to complete (default: false)");
+MODULE_PARM_DESC(wait, "Wait for tests to complete (default: true)");
 
 static bool dmatest_match_channel(struct dmatest_params *params,
 		struct dma_chan *chan)
@@ -433,6 +537,10 @@ static unsigned long long dmatest_KBs(s64 runtime, unsigned long long len)
  * So if the DMA engine doesn't copy exactly what we tell it to copy,
  * we'll notice.
  */
+extern
+size_t l3lock_size(void);
+extern
+phys_addr_t memblock_end_of_DRAM(void);
 static int dmatest_func(void *data)
 {
 	struct dmatest_thread	*thread = data;
@@ -489,28 +597,45 @@ static int dmatest_func(void *data)
 	} else
 		goto err_thread_type;
 
-	thread->srcs = kcalloc(src_cnt+1, sizeof(u8 *), /*GFP_KERNEL*/GFP_DMA32);
+	thread->srcs = _kcalloc(src_cnt+1, sizeof(u8 *), SRC);
 	if (!thread->srcs)
 		goto err_srcs;
 	for (i = 0; i < src_cnt; i++) {
-		thread->srcs[i] = kzalloc(params->buf_size, /*GFP_KERNEL*/GFP_DMA32);
+		thread->srcs[i] = _kzalloc(params->buf_size, SRC);
 		if (!thread->srcs[i])
 			goto err_srcbuf;
 	}
 	thread->srcs[i] = NULL;
 
-	thread->dsts = kcalloc(dst_cnt+1, sizeof(u8 *), /*GFP_KERNEL*/GFP_DMA32);
+	thread->dsts = _kcalloc(dst_cnt+1, sizeof(u8 *), DEST);
 	if (!thread->dsts)
 		goto err_dsts;
 	for (i = 0; i < dst_cnt; i++) {
-		thread->dsts[i] = kzalloc(params->buf_size, /*GFP_KERNEL*/GFP_DMA32);
+		thread->dsts[i] = _kzalloc(params->buf_size, DEST);
 		if (!thread->dsts[i])
 			goto err_dstbuf;
 	}
 	thread->dsts[i] = NULL;
 
+{
+	phys_addr_t l3lock_addr = memblock_end_of_DRAM() - l3lock_size();
+
+#define V2P(where,index) virt_to_phys(thread->where[index])
+
+	for (i = 0; i < src_cnt; i++)
+		dmatest_dbg(1, "src[%d] @ %p (%s) to dst[%d] @ %p (%s)\n",
+			i, (void*)V2P(srcs,i),
+			V2P(srcs,i) >= l3lock_addr && V2P(srcs,i) <= memblock_end_of_DRAM() ? "l3lock" : "l3unlock",
+			i, (void*)V2P(dsts,i),
+			V2P(dsts,i) >= l3lock_addr && V2P(dsts,i) <= memblock_end_of_DRAM() ? "l3lock" : "l3unlock"
+		);
+}
+
+
 	dmatest_dbg(0, "after kmalloc srcs[0] %X @ %p\n",
 			*(volatile unsigned*)thread->srcs[0], (void*) thread->srcs[0]);
+	dmatest_dbg(0, "after kmalloc dsts[0] %X @ %p\n",
+			*(volatile unsigned*)thread->dsts[0], (void*) thread->dsts[0]);
 
 	set_user_nice(current, 10);
 
@@ -562,7 +687,10 @@ static int dmatest_func(void *data)
 		if (!len)
 			len = 1 << align;
 
-		total_len += len;
+		if (thread->type == DMA_SG)
+			total_len += (len*src_cnt);
+		else
+			total_len += len;
 
 		if (params->noverify) {
 			src_off = 0;
@@ -594,8 +722,7 @@ static int dmatest_func(void *data)
 
 		dmatest_dbg(0, "before get_unmap srcs[0] %X @ %p\n",
 				*(volatile unsigned*)thread->srcs[0], (void*) thread->srcs[0]);
-		um = dmaengine_get_unmap_data(dev->dev, src_cnt+dst_cnt,
-					      /*GFP_KERNEL*/GFP_DMA32);
+		um = _dmaengine_get_unmap_data(dev->dev, src_cnt+dst_cnt);
 		dmatest_dbg(0, "after get_unmap srcs[0] %X @ %p\n",
 				*(volatile unsigned*)thread->srcs[0], (void*) thread->srcs[0]);
 		if (!um) {
@@ -783,16 +910,17 @@ err_srcbuf:
 err_srcs:
 	kfree(pq_coefs);
 err_thread_type:
+
 {
 	unsigned long long bw_mbps = dmatest_KBs(runtime, total_len)*8/1024;
 
 	pr_info("[%s] summary %u tests, %u failures %llu iops %llu KB/s (%llu Mb/s) buf_s %u (%d)\n",
 		current->comm, total_tests, failed_tests,
 		dmatest_persec(runtime, total_tests),
-		dmatest_KBs(runtime, total_len), 
+		dmatest_KBs(runtime, total_len),
 		bw_mbps,
 		params->buf_size, ret);
-	
+
 	mutex_lock(&lock_bw);
 	bw_mbps_total += bw_mbps;
 	mutex_unlock(&lock_bw);
@@ -983,10 +1111,13 @@ static void run_threaded_test(struct dmatest_info *info)
 	params->timeout = timeout;
 	params->noverify = noverify;
 
-	/*request_channels(info, DMA_MEMCPY);
-	request_channels(info, DMA_XOR);*/
+#if RUN_SG
 	request_channels(info, DMA_SG);
-	/*request_channels(info, DMA_PQ);*/
+#else
+	request_channels(info, DMA_MEMCPY);
+#endif
+	/*request_channels(info, DMA_XOR);
+	request_channels(info, DMA_PQ);*/
 }
 
 static void stop_threaded_test(struct dmatest_info *info)
@@ -1050,8 +1181,11 @@ static int dmatest_run_set(const char *val, const struct kernel_param *kp)
 
 	if (is_threaded_test_run(info))
 		ret = -EBUSY;
-	else if (dmatest_run)
+	else if (dmatest_run) {
+		bw_mbps_total = 0;
+		pr_info("mb: bw_mbps_total %u before run\n", bw_mbps_total);
 		restart_threaded_test(info, dmatest_run);
+	}
 
 	mutex_unlock(&info->lock);
 
@@ -1069,14 +1203,20 @@ static int __init dmatest_init(void)
 		mutex_unlock(&info->lock);
 	}
 
-	if (params->iterations && wait)
+	if (params->iterations && wait) {
 		wait_event(thread_wait, !is_threaded_test_run(info));
+		pr_info("mb: waiting done\n");
+		dmatest_dbg(1, "%s() Threaded test completed\n", __func__);
+		dmatest_dbg(1, "L3:%s TYPE:%s BUF_SIZE:%u ITERS:%u => BW total %u Mbps\n", __stringify(TEST_USES),
+
+				RUN_SG ? "DMA_SG" : "DMA_COPY", test_buf_size, iterations, bw_mbps_total);
+	}
+
 
 	/* module parameters are stable, inittime tests are started,
 	 * let userspace take over 'run' control
 	 */
 	info->did_init = true;
-	dmatest_dbg(1, "added\n");
 
 	return 0;
 }
@@ -1090,9 +1230,6 @@ static void __exit dmatest_exit(void)
 	mutex_lock(&info->lock);
 	stop_threaded_test(info);
 	mutex_unlock(&info->lock);
-
-	dmatest_dbg(1, "BW total %llu Mbps\n",  bw_mbps_total);
-	dmatest_dbg(1, "removed\n");
 }
 module_exit(dmatest_exit);
 

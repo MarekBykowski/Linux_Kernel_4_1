@@ -36,6 +36,7 @@
 #include <linux/efi.h>
 #include <linux/swiotlb.h>
 #include <linux/vmalloc.h>
+#include <linux/memblock.h>
 
 #include <asm/boot.h>
 #include <asm/fixmap.h>
@@ -81,15 +82,20 @@ early_param("initrd", early_initrd);
  * currently assumes that for memory starting above 4G, 32-bit devices will
  * use a DMA offset.
  */
-static size_t l3lock_size = SZ_16M;
+size_t l3lock_size(void)
+{
+	return SZ_16M;
+}
+EXPORT_SYMBOL(l3lock_size);
+
 static phys_addr_t __init max_zone_dma_phys(void)
 {
 	phys_addr_t arm64_dma_phys_limit;
 
 	phys_addr_t offset = memblock_start_of_DRAM() & GENMASK_ULL(63, 32);
-	pr_info("mb: %s() offset + (1ULL << 32) %lx\n", __func__, (unsigned long) (offset + (1ULL << 32)));
+	pr_debug("mb: %s() offset + (1ULL << 32) %lx\n", __func__, (unsigned long) (offset + (1ULL << 32)));
 	arm64_dma_phys_limit = min(offset + (1ULL << 32), memblock_end_of_DRAM());
-	return (arm64_dma_phys_limit -= l3lock_size);
+	return (arm64_dma_phys_limit -= l3lock_size());
 }
 
 #ifdef CONFIG_NUMA
@@ -122,7 +128,7 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 	zone_size[ZONE_DMA] = max_dma - min;
 #endif
 #ifdef CONFIG_ZONE_DMA32
-	max_dma32 = PFN_UP(arm64_dma_phys_limit + l3lock_size);
+	max_dma32 = PFN_UP(arm64_dma_phys_limit + l3lock_size());
 	zone_size[ZONE_DMA32] = max_dma32 - max_dma;
 #endif
 
@@ -132,8 +138,8 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 	zone_size[ZONE_NORMAL] = max - max_dma;
 #endif
 
-	pr_info("mb: memblock_start_of_DRAM %lx memblock_end_of_DRAM %lx\n", (unsigned long) memblock_start_of_DRAM(), (unsigned long) memblock_end_of_DRAM());
-	pr_info("mb: max %lu max_dma %lu zone_size[%d] %lu\n", max, max_dma, ZONE_NORMAL, zone_size[ZONE_NORMAL]);
+	pr_debug("mb: memblock_start_of_DRAM %lx memblock_end_of_DRAM %lx\n", (unsigned long) memblock_start_of_DRAM(), (unsigned long) memblock_end_of_DRAM());
+	pr_debug("mb: max %lu max_dma %lu zone_size[%d] %lu\n", max, max_dma, ZONE_NORMAL, zone_size[ZONE_NORMAL]);
 	memcpy(zhole_size, zone_size, sizeof(zhole_size));
 
 	for_each_memblock(memory, reg) {
@@ -426,6 +432,8 @@ static void __init free_unused_memmap(void)
 }
 #endif	/* !CONFIG_SPARSEMEM_VMEMMAP */
 
+
+
 /*
  * mem_init() marks the free areas in the mem_map and tells us how much memory
  * is free.  This is done after various parts of the system have claimed their
@@ -434,9 +442,13 @@ static void __init free_unused_memmap(void)
 void __init mem_init(void)
 {
 	if (swiotlb_force == SWIOTLB_FORCE ||
-	    max_pfn > (arm64_dma_phys_limit >> PAGE_SHIFT))
+	    max_pfn > (arm64_dma_phys_limit >> PAGE_SHIFT)) {
 		swiotlb_init(1);
-	else
+		pr_info("mb: %s() after swiotlb_init(1)\n", __func__);
+		pr_info("mb: %s() this mf wants to allocate from\n" 
+				"BOOTMEM_LOW_LIMIT %#lx / ARCH_LOW_ADDRESS_LIMIT %#lx\n", 
+					__func__, (unsigned long)BOOTMEM_LOW_LIMIT, (unsigned long)ARCH_LOW_ADDRESS_LIMIT);
+	} else
 		swiotlb_force = SWIOTLB_NO_FORCE;
 
 	set_max_mapnr(pfn_to_page(max_pfn) - mem_map);
@@ -445,7 +457,31 @@ void __init mem_init(void)
 	free_unused_memmap();
 #endif
 	/* this will put all unused low memory onto the freelists */
+	
+{
+	struct pglist_data *pgdat;
+	for_each_online_pgdat(pgdat) {
+		struct zone *z;
+		for (z = pgdat->node_zones; z < pgdat->node_zones + MAX_NR_ZONES; z++) {
+			pr_info("mb: %s() %s->managed_pages %lu", __func__, z->name, z->managed_pages);
+		}
+	}
+}
 	free_all_bootmem();
+	__memblock_dump_all();
+	/*memblock_dump(&memblock.reserved, "reserved");*/
+
+
+
+{
+	struct pglist_data *pgdat;
+	for_each_online_pgdat(pgdat) {
+		struct zone *z;
+		for (z = pgdat->node_zones; z < pgdat->node_zones + MAX_NR_ZONES; z++) {
+			pr_info("mb: %s() %s->managed_pages %lu", __func__, z->name, z->managed_pages);
+		}
+	}
+}
 
 	mem_init_print_info(NULL);
 
