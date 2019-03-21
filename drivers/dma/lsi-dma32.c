@@ -177,8 +177,13 @@ static struct gpdma_desc *get_descriptor(struct gpdma_engine *engine)
 {
 	unsigned long flags;
 	struct gpdma_desc *new = NULL, *desc, *tmp;
+	ktime_t spintime = ktime_set(0,0);
 
+	spintime = ktime_get();
 	spin_lock_irqsave(&engine->lock, flags);
+	trace_printk(" callled from %pf spintime %llu ns\n",
+			(void*) _RET_IP_,
+			ktime_to_ns(ktime_sub(ktime_get(),spintime)));
 	list_for_each_entry_safe(desc, tmp, &engine->free_list, vdesc.node) {
 		if (async_tx_test_ack(&desc->vdesc.tx)) {
 			list_del(&desc->vdesc.node);
@@ -525,9 +530,9 @@ gpdma_prep_sg(struct dma_chan *chan,
 		if (rif_mode && len % 16) {
 			tail_length = 16 - (len % 16);
 			mb_dbg("mb: tail_length %u\n", tail_length);
-		} else 
+		} else {
 			tail_length = 0;
-			
+		}
 
 		if (len > 0) {
 			dst = sg_dma_address(dst_sg) +
@@ -538,6 +543,8 @@ gpdma_prep_sg(struct dma_chan *chan,
 			src_acc = min(ffs((u32)src | (len + tail_length)) - 1, 4);
 			dst_acc = min(ffs((u32)dst | len) - 1, 4);
 
+			trace_printk(" called from %pf src %pa dst %pa\n",
+				(void*) _RET_IP_, &src, &dst);
 			new = get_descriptor(dmac->engine);
 			if (!new) {
 				ch_dbg(dmac, "ERROR: No descriptor\n");

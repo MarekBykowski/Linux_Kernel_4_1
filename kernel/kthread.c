@@ -410,6 +410,7 @@ struct task_struct *kthread_create_on_cpu(int (*threadfn)(void *data),
 	to_kthread(p)->cpu = cpu;
 	return p;
 }
+EXPORT_SYMBOL(kthread_create_on_cpu);
 
 static void __kthread_unpark(struct task_struct *k, struct kthread *kthread)
 {

@@ -22,10 +22,19 @@
 #include <linux/slab.h>
 #include <linux/wait.h>
 
+#include <linux/mmzone.h> /* for iteratin over mm zones*/
+
+#define CPU_BINDING 0
+
+#if CPU_BINDING
+/* cpus onwards to bind the kthreads to */
+static unsigned cpu = 15;
+#endif
+
 static int dmatest_loglevel = 1;
 #define dmatest_dbg(level, fmt, ...) \
 	do { \
-		if (level >  dmatest_loglevel) \
+		if (level >=  dmatest_loglevel) \
 			printk(KERN_INFO KBUILD_MODNAME ": " "[%s] " fmt, \
 				current->comm, ##__VA_ARGS__); \
 	} while (0)
@@ -537,10 +546,6 @@ static unsigned long long dmatest_KBs(s64 runtime, unsigned long long len)
  * So if the DMA engine doesn't copy exactly what we tell it to copy,
  * we'll notice.
  */
-extern
-size_t l3lock_size(void);
-extern
-phys_addr_t memblock_end_of_DRAM(void);
 static int dmatest_func(void *data)
 {
 	struct dmatest_thread	*thread = data;
@@ -618,16 +623,24 @@ static int dmatest_func(void *data)
 	thread->dsts[i] = NULL;
 
 {
-	phys_addr_t l3lock_addr = memblock_end_of_DRAM() - l3lock_size();
-
+	struct zone *zone;
+	phys_addr_t zone_start_paddr, zone_end_paddr;
+	for_each_zone(zone) {
+		if (!strncmp(zone->name,"DMA32", sizeof("DMA32"))) {
+			zone_start_paddr = PFN_PHYS(zone->zone_start_pfn);
+			zone_end_paddr = PFN_PHYS(zone_end_pfn(zone));
+			dmatest_dbg(1, "zone_start_paddr %pa, zone_start_paddr %pa\n",
+				&zone_start_paddr, &zone_end_paddr);
+		}
+	}
 #define V2P(where,index) virt_to_phys(thread->where[index])
 
 	for (i = 0; i < src_cnt; i++)
 		dmatest_dbg(1, "src[%d] @ %p (%s) to dst[%d] @ %p (%s)\n",
 			i, (void*)V2P(srcs,i),
-			V2P(srcs,i) >= l3lock_addr && V2P(srcs,i) <= memblock_end_of_DRAM() ? "l3lock" : "l3unlock",
+			V2P(srcs,i) >= zone_start_paddr && V2P(srcs,i) <= zone_end_paddr ? "l3lock" : "l3unlock",
 			i, (void*)V2P(dsts,i),
-			V2P(dsts,i) >= l3lock_addr && V2P(dsts,i) <= memblock_end_of_DRAM() ? "l3lock" : "l3unlock"
+			V2P(dsts,i) >= zone_start_paddr && V2P(dsts,i) <= zone_end_paddr ? "l3lock" : "l3unlock"
 		);
 }
 
@@ -957,6 +970,7 @@ static void dmatest_cleanup_channel(struct dmatest_chan *dtc)
 	kfree(dtc);
 }
 
+#include <asm/smp_plat.h>
 static int dmatest_add_threads(struct dmatest_info *info,
 		struct dmatest_chan *dtc, enum dma_transaction_type type)
 {
@@ -990,8 +1004,20 @@ static int dmatest_add_threads(struct dmatest_info *info,
 		thread->test_done.wait = &thread->done_wait;
 		init_waitqueue_head(&thread->done_wait);
 		smp_wmb();
+
+#if CPU_BINDING
+{
+		char name[20] = {0};
+		snprintf(name, sizeof(name), "%s-%s%u", dma_chan_name(chan), op, i);
+		thread->task = kthread_create_on_cpu(dmatest_func, thread, 
+				cpu, name);
+		dmatest_dbg(1, "mb: kthread %s binding to cpu %u\n", name, cpu);
+		cpu++;
+}
+#else
 		thread->task = kthread_create(dmatest_func, thread, "%s-%s%u",
 				dma_chan_name(chan), op, i);
+#endif
 		if (IS_ERR(thread->task)) {
 			pr_warn("Failed to create thread %s-%s%u\n",
 				dma_chan_name(chan), op, i);
@@ -1183,6 +1209,9 @@ static int dmatest_run_set(const char *val, const struct kernel_param *kp)
 		ret = -EBUSY;
 	else if (dmatest_run) {
 		bw_mbps_total = 0;
+#if CPU_BINDING
+		cpu = 15;
+#endif
 		pr_info("mb: bw_mbps_total %u before run\n", bw_mbps_total);
 		restart_threaded_test(info, dmatest_run);
 	}
