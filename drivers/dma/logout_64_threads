@@ -1,0 +1,42 @@
+#############################################
+Test started Tue Mar 19 07:09:01 CDT 2019
+#############################################
+Test took 8 sec. lmbench in the background no
+L3:l3_lock_to_l3_lock iter:10000 buf_size:6580 sg_buffers:3 threads_per_chan:16 => BW 21336 Mbps
+
+Test took 8 sec. lmbench in the background no
+L3:l3_lock_to_l3_lock iter:10000 buf_size:6592 sg_buffers:3 threads_per_chan:16 => BW 27840 Mbps
+
+Test took 8 sec. lmbench in the background no
+L3:l3_lock_to_l3_unlock iter:10000 buf_size:6580 sg_buffers:3 threads_per_chan:16 => BW 21404 Mbps
+
+Test took 8 sec. lmbench in the background no
+L3:l3_lock_to_l3_unlock iter:10000 buf_size:6592 sg_buffers:3 threads_per_chan:16 => BW 27931 Mbps
+
+Test took 8 sec. lmbench in the background no
+L3:l3_unlock_to_l3_unlock iter:10000 buf_size:6580 sg_buffers:3 threads_per_chan:16 => BW 21418 Mbps
+
+Test took 9 sec. lmbench in the background no
+L3:l3_unlock_to_l3_unlock iter:10000 buf_size:6592 sg_buffers:3 threads_per_chan:16 => BW 28135 Mbps
+
+Test took 15 sec. lmbench in the background yes
+L3:l3_lock_to_l3_lock iter:10000 buf_size:6580 sg_buffers:3 threads_per_chan:16 => BW 14194 Mbps
+
+Test took 15 sec. lmbench in the background yes
+L3:l3_lock_to_l3_lock iter:10000 buf_size:6592 sg_buffers:3 threads_per_chan:16 => BW 15047 Mbps
+
+Test took 16 sec. lmbench in the background yes
+L3:l3_lock_to_l3_unlock iter:10000 buf_size:6580 sg_buffers:3 threads_per_chan:16 => BW 14450 Mbps
+
+Test took 15 sec. lmbench in the background yes
+L3:l3_lock_to_l3_unlock iter:10000 buf_size:6592 sg_buffers:3 threads_per_chan:16 => BW 16080 Mbps
+
+Test took 17 sec. lmbench in the background yes
+L3:l3_unlock_to_l3_unlock iter:10000 buf_size:6580 sg_buffers:3 threads_per_chan:16 => BW 13400 Mbps
+
+Test took 16 sec. lmbench in the background yes
+L3:l3_unlock_to_l3_unlock iter:10000 buf_size:6592 sg_buffers:3 threads_per_chan:16 => BW 15455 Mbps
+
+#############################################
+Test ended Tue Mar 19 07:11:34 CDT 2019
+#############################################

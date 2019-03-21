@@ -1,0 +1,24 @@
+#############################################
+Test started Mon Mar 18 11:10:24 CDT 2019
+#############################################
+Test took 28 sec. lmbench in the background no
+L3:l3_lock_to_l3_lock iter:10000 buf_size:6580 sg_buffers:24 threads_per_chan:2 => BW 59970 Mbps
+
+Test took 28 sec. lmbench in the background no
+L3:l3_lock_to_l3_lock iter:10000 buf_size:6592 sg_buffers:24 threads_per_chan:2 => BW 87636 Mbps
+
+Test took 30 sec. lmbench in the background no
+L3:l3_lock_to_l3_unlock iter:10000 buf_size:6580 sg_buffers:24 threads_per_chan:2 => BW 36396 Mbps
+
+Test took 28 sec. lmbench in the background no
+L3:l3_lock_to_l3_unlock iter:10000 buf_size:6592 sg_buffers:24 threads_per_chan:2 => BW 89966 Mbps
+
+Test took 29 sec. lmbench in the background no
+L3:l3_unlock_to_l3_unlock iter:10000 buf_size:6580 sg_buffers:24 threads_per_chan:2 => BW 36032 Mbps
+
+Test took 28 sec. lmbench in the background no
+L3:l3_unlock_to_l3_unlock iter:10000 buf_size:6592 sg_buffers:24 threads_per_chan:2 => BW 86435 Mbps
+
+#############################################
+Test ended Mon Mar 18 11:13:17 CDT 2019
+#############################################
