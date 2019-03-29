@@ -195,6 +195,13 @@ config QCOM_SCM
 	depends on ARM || ARM64
 	select RESET_CONTROLLER
 
+config SMC_TIME
+	tristate "Measure round-trip time of SMC calls"
+	depends on HAVE_ARM_SMCCC
+	default m
+	help
+	  The module measures a round-trip time the SMC call takes.
+
 config QCOM_SCM_32
 	def_bool y
 	depends on QCOM_SCM && ARM
