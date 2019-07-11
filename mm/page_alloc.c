@@ -2694,7 +2694,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 			pcp = &this_cpu_ptr(zone->pageset)->pcp;
 			
 			if (gfp_flags & GFP_DMA32) {
-				pr_info("zone->name %s pcp->count %d, pcp->batch %d\n",
+				pr_debug("mb: zone->name %s pcp->count %d, pcp->batch %d\n",
 						zone->name, pcp->count, pcp->batch);
 			}
 
@@ -2730,7 +2730,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 				page = __rmqueue_smallest(zone, order, MIGRATE_HIGHATOMIC);
 				if (page) {
 					if (gfp_flags & GFP_DMA32) {
-						pr_info("mb11: %s()\n", __func__);
+						pr_debug("mb: %s()\n", __func__);
 					}
 					trace_mm_page_alloc_zone_locked(page, order, migratetype);
 				}
@@ -2738,7 +2738,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 			if (!page) {
 				page = __rmqueue(zone, order, migratetype);
 				if (gfp_flags & GFP_DMA32) {
-					pr_info("mb12: %s() zone->name %s order %u migratetype %d page %p\n", 
+					pr_debug("mb: %s() zone->name %s order %u migratetype %d page %p\n", 
 					__func__, zone->name, order, migratetype, (void*)page);
 				}
 			}
@@ -2988,7 +2988,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 	int i = 0;
 
 	if (gfp_mask & GFP_DMA32) {
-		pr_info("mb: %s() %pGg\n", __func__, &gfp_mask);
+		pr_debug("mb: %s() %pGg\n", __func__, &gfp_mask);
 	}
 
 	/*
@@ -3011,8 +3011,8 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 				continue;
 
 		if (gfp_mask & GFP_DMA32) {
-			pr_info("mb: %s() zone iterator %i\n", __func__, i++);
-			pr_info("mb: %s() zone->name %s\n", __func__, zone->name);
+			pr_debug("mb: %s() zone iterator %i\n", __func__, i++);
+			pr_debug("mb: %s() zone->name %s\n", __func__, zone->name);
 		}
 
 		/*
@@ -3045,7 +3045,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 		}
 
 		if (gfp_mask & GFP_DMA32) {
-			pr_info("mb: %s() min_wmark_pages(z) %lu low_wmark_pages(z) %lu high_wmark_pages(z) %lu\n"
+			pr_debug("mb: %s() min_wmark_pages(z) %lu low_wmark_pages(z) %lu high_wmark_pages(z) %lu\n"
 					" alloc_flags 0x%x\n",
 					__func__,
 					min_wmark_pages(zone), low_wmark_pages(zone), high_wmark_pages(zone),
@@ -3058,7 +3058,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 			int ret;
 
 			if (gfp_mask & GFP_DMA32) {
-				pr_info("mb: %s() are you here ever? zone->name %s\n", __func__, zone->name);
+				pr_debug("mb: %s() are you here ever? zone->name %s\n", __func__, zone->name);
 			}
 			/* Checked here to keep the fast path fast */
 			BUILD_BUG_ON(ALLOC_NO_WATERMARKS < NR_WMARK);
@@ -3070,7 +3070,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 			if (node_reclaim_mode == 0 ||
 			    !zone_allows_reclaim(ac->preferred_zoneref->zone, zone)) {
 				if (gfp_mask & GFP_DMA32) {
-					pr_info("mb: %s() r u before continue? zone->name %s\n"
+					pr_debug("mb: %s() r u before continue? zone->name %s\n"
 							"node_reclaim_mode %d zone_allows_reclaim() returns %d\n",
 								 __func__, zone->name,
 								node_reclaim_mode,
@@ -3082,7 +3082,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 
 			ret = node_reclaim(zone->zone_pgdat, gfp_mask, order);
 			if (gfp_mask & GFP_DMA32) {
-				pr_info("mb: %s() zone->name %s ret %d\n", 
+				pr_debug("mb: %s() zone->name %s ret %d\n", 
 							__func__, zone->name, ret);
 			}
 			switch (ret) {
@@ -3105,7 +3105,7 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 try_this_zone:
 
 		if (gfp_mask & GFP_DMA32) {
-			pr_info("mb: %s() ac->preferred_zoneref->zone->name %s ac->migratetype %d zone->name %s\n", 
+			pr_debug("mb: %s() ac->preferred_zoneref->zone->name %s ac->migratetype %d zone->name %s\n", 
 					__func__, ac->preferred_zoneref->zone->name, ac->migratetype, zone->name);
 		}
 
@@ -3919,10 +3919,10 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 #endif
 	if (gfp_mask & GFP_DMA32) {
 		struct zone* z = zonelist_zone(zonelist->_zonerefs);
-		pr_info("mb: %s() heart of buddyallocator: %pGg\n", __func__, &gfp_mask);
-		pr_info("mb: %s() ac.high_zoneidx (dma32 is 1) %d\n", __func__, ac.high_zoneidx);
-		pr_info("mb: %s() zonelist_zone(zonelist->_zonerefs)->name %s\n", __func__, z->name);
-		pr_info("mb: %s() %s spanned_pages %lu in pages (in bytes 0x%lx) = zone_end_pfn - zone_start_pfn %lu(phys %lx)\n",
+		pr_debug("mb: %s() heart of buddyallocator: %pGg\n", __func__, &gfp_mask);
+		pr_debug("mb: %s() ac.high_zoneidx (dma32 is 1) %d\n", __func__, ac.high_zoneidx);
+		pr_debug("mb: %s() zonelist_zone(zonelist->_zonerefs)->name %s\n", __func__, z->name);
+		pr_debug("mb: %s() %s spanned_pages %lu in pages (in bytes 0x%lx) = zone_end_pfn - zone_start_pfn %lu(phys %lx)\n",
 				__func__, z->name,
 				z->spanned_pages, (unsigned long) PFN_PHYS(z->spanned_pages),
 				z->zone_start_pfn, (unsigned long) PFN_PHYS(z->zone_start_pfn));
@@ -3967,7 +3967,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 					ac.high_zoneidx, ac.nodemask);
 
 	if (gfp_mask & GFP_DMA32) {
-		pr_info("mb: %s (ac.preferred_zoneref)->zone->name %s\n", 
+		pr_debug("mb: %s (ac.preferred_zoneref)->zone->name %s\n", 
 				__func__, (ac.preferred_zoneref)->zone->name);
 	}
 
@@ -5929,7 +5929,7 @@ static unsigned long __paginginit calc_memmap_size(unsigned long spanned_pages,
 	    IS_ENABLED(CONFIG_SPARSEMEM))
 		pages = present_pages;
 
-	pr_info("mb: %s() pages %lu sizeof(struct page) %lu PAGE_SHIFT %lu\n"
+	pr_debug("mb: %s() pages %lu sizeof(struct page) %lu PAGE_SHIFT %lu\n"
 			" PAGE_ALIGN(pages * sizeof(struct page)) >> PAGE_SHIFT %lu\n",
 		__func__, pages, sizeof(struct page), (unsigned long) PAGE_SHIFT,
 		PAGE_ALIGN(pages * sizeof(struct page)) >> PAGE_SHIFT);
@@ -5978,6 +5978,9 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		size = zone->spanned_pages;
 		realsize = freesize = zone->present_pages;
 
+		printk(KERN_DEBUG "\nmb: freesize %lu\n",
+						   freesize); 
+
 		/*
 		 * Adjust freesize so that it accounts for how much memory
 		 * is used by this zone for memmap. This affects the watermark
@@ -5987,10 +5990,13 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		if (!is_highmem_idx(j)) {
 			if (freesize >= memmap_pages) {
 				freesize -= memmap_pages;
-				if (memmap_pages)
+				if (memmap_pages) {
 					printk(KERN_DEBUG
 					       "  %s zone: %lu pages used for memmap\n",
 					       zone_names[j], memmap_pages);
+					printk(KERN_DEBUG "mb: freesize -= memmap_pages %lu\n",
+						   freesize); 
+				}
 			} else
 				pr_warn("  %s zone: %lu pages exceeds freesize %lu\n",
 					zone_names[j], memmap_pages, freesize);
@@ -6001,6 +6007,8 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 			freesize -= dma_reserve;
 			printk(KERN_INFO "  %s zone: %lu pages reserved\n",
 					zone_names[0], dma_reserve);
+			printk(KERN_DEBUG "mb: freesize -= dma_reserve %lu\n",
+					   freesize); 
 		}
 
 		if (!is_highmem_idx(j))
@@ -6016,6 +6024,8 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		 * And all highmem pages will be managed by the buddy system.
 		 */
 		zone->managed_pages = is_highmem_idx(j) ? realsize : freesize;
+		printk(KERN_DEBUG "mb: managed_pages = freesize %lu\n",
+					   freesize); 
 #ifdef CONFIG_NUMA
 		zone->node = nid;
 #endif
@@ -6033,6 +6043,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat)
 		ret = init_currently_empty_zone(zone, zone_start_pfn, size);
 		BUG_ON(ret);
 		memmap_init(size, nid, j, zone_start_pfn);
+		printk(KERN_DEBUG "mb:2 managed_pages %lu\n", zone->managed_pages); 
 	}
 }
 
@@ -6592,6 +6603,8 @@ void adjust_managed_page_count(struct page *page, long count)
 {
 	spin_lock(&managed_page_count_lock);
 	page_zone(page)->managed_pages += count;
+	/*pr_info("mb: %s() page_zone(page)->name %s  page_to_phys %lX \n",
+			__func__, page_zone(page)->name, (unsigned long)page_to_phys(page));*/
 	totalram_pages += count;
 #ifdef CONFIG_HIGHMEM
 	if (PageHighMem(page))

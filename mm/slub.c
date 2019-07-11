@@ -1563,7 +1563,7 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 		alloc_gfp = (alloc_gfp | __GFP_NOMEMALLOC) & ~(__GFP_RECLAIM|__GFP_NOFAIL);
 
 	if (alloc_gfp & GFP_DMA32)
-    	pr_info("mb: %s(): %pGg calls alloc_slab_page() \n", __func__, &alloc_gfp);
+    	pr_debug("mb: %s(): %pGg calls alloc_slab_page() \n", __func__, &alloc_gfp);
 
 	page = alloc_slab_page(s, alloc_gfp, node, oo);
 	if (unlikely(!page)) {
@@ -2640,7 +2640,7 @@ new_slab:
 	}
 
 	if (gfpflags & GFP_DMA32)
-    	pr_info("mb: %s(): %pGg\n", __func__, &gfpflags);
+    	pr_debug("mb: %s(): %pGg\n", __func__, &gfpflags);
 	freelist = new_slab_objects(s, gfpflags, node, &c);
 
 	if (unlikely(!freelist)) {
@@ -2709,7 +2709,7 @@ static __always_inline void *slab_alloc_node(struct kmem_cache *s,
 	unsigned long tid;
 
 	if (gfpflags & GFP_DMA32)
-		pr_info("mb: %s(): %pGg\n", __func__, &gfpflags);
+		pr_debug("mb: %s(): %pGg\n", __func__, &gfpflags);
 
 	s = slab_pre_alloc_hook(s, gfpflags);
 	if (!s)
@@ -3810,7 +3810,7 @@ void *__kmalloc(size_t size, gfp_t flags)
 	void *ret;
 
 	if (flags & GFP_DMA32) {
-    	pr_info("mb: %s(): %pGg\n", __func__, &flags);
+    	pr_debug("mb: %s(): %pGg\n", __func__, &flags);
 	}
 
 	if (unlikely(size > KMALLOC_MAX_CACHE_SIZE))

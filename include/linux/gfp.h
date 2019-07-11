@@ -383,7 +383,7 @@ static inline enum zone_type gfp_zone(gfp_t flags)
 					 ((1 << GFP_ZONES_SHIFT) - 1);
 
 	if (flags & GFP_DMA32) {
-		pr_info("mb: bit 0x%x GFP_ZONEMASK 0x%x GFP_ZONE_TABLE 0x%lx z 0x%x\n",
+		pr_debug("mb: bit 0x%x GFP_ZONEMASK 0x%x GFP_ZONE_TABLE 0x%lx z 0x%x\n",
 				bit, GFP_ZONEMASK, (unsigned long) GFP_ZONE_TABLE, z);
 	}
 
@@ -450,7 +450,7 @@ __alloc_pages_node(int nid, gfp_t gfp_mask, unsigned int order)
 	VM_WARN_ON(!node_online(nid));
 
 	if (gfp_mask & GFP_DMA32)
-    	pr_info("mb: %s(): nid %d order %u %pGg\n", 
+    	pr_debug("mb: %s(): nid %d order %u %pGg\n", 
 			__func__, nid, order, &gfp_mask);
 	return __alloc_pages(gfp_mask, order, node_zonelist(nid, gfp_mask));
 }

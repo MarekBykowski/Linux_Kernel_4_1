@@ -3742,7 +3742,7 @@ static __always_inline void *__do_kmalloc(size_t size, gfp_t flags,
 void *__kmalloc(size_t size, gfp_t flags)
 {
 	if (flags & GFP_DMA32)
-    	pr_info("mb: %s(): %pGg\n", __func__, &flags);
+    	pr_debug("mb: %s(): %pGg\n", __func__, &flags);
 	return __do_kmalloc(size, flags, _RET_IP_);
 }
 EXPORT_SYMBOL(__kmalloc);
