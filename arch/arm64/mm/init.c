@@ -16,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#define DEBUG
 
 #include <linux/kernel.h>
 #include <linux/export.h>
@@ -77,16 +78,21 @@ static int __init early_initrd(char *p)
 early_param("initrd", early_initrd);
 #endif
 
+struct l3_lock_config {
+	phys_addr_t l3_lock_base_addr;
+	size_t l3_lock_size;
+};
+
+static struct l3_lock_config l3_lock_config =  {
+	.l3_lock_base_addr = 0x40000000,
+	.l3_lock_size = 16ULL << 20,
+};
+
 /*
  * Return the maximum physical address for ZONE_DMA (DMA_BIT_MASK(32)). It
  * currently assumes that for memory starting above 4G, 32-bit devices will
  * use a DMA offset.
  */
-size_t l3lock_size(void)
-{
-	return SZ_16M;
-}
-EXPORT_SYMBOL(l3lock_size);
 
 static phys_addr_t __init max_zone_dma_phys(void)
 {
@@ -95,7 +101,10 @@ static phys_addr_t __init max_zone_dma_phys(void)
 	phys_addr_t offset = memblock_start_of_DRAM() & GENMASK_ULL(63, 32);
 	pr_debug("mb: %s() offset + (1ULL << 32) %lx\n", __func__, (unsigned long) (offset + (1ULL << 32)));
 	arm64_dma_phys_limit = min(offset + (1ULL << 32), memblock_end_of_DRAM());
-	return (arm64_dma_phys_limit -= l3lock_size());
+	arm64_dma_phys_limit = min(l3_lock_config.l3_lock_base_addr, memblock_end_of_DRAM());
+	/* Limit DMA memory to half of what it is capable to be */
+	arm64_dma_phys_limit = arm64_dma_phys_limit / 2;
+	return arm64_dma_phys_limit;
 }
 
 #ifdef CONFIG_NUMA
@@ -128,11 +137,12 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 	zone_size[ZONE_DMA] = max_dma - min;
 #endif
 #ifdef CONFIG_ZONE_DMA32
-	max_dma32 = PFN_UP(arm64_dma_phys_limit + l3lock_size());
+	max_dma32 = PFN_UP(arm64_dma_phys_limit + l3_lock_config.l3_lock_size);
 	zone_size[ZONE_DMA32] = max_dma32 - max_dma;
 #endif
 
 #ifdef CONFIG_ZONE_DMA32
+	pr_debug("mb: max %lu max_dma %lu max_dma32 %lu\n", max, max_dma, max_dma32);
 	zone_size[ZONE_NORMAL] = max - max_dma32;
 #else
 	zone_size[ZONE_NORMAL] = max - max_dma;
@@ -478,7 +488,7 @@ void __init mem_init(void)
 	for_each_online_pgdat(pgdat) {
 		struct zone *z;
 		for (z = pgdat->node_zones; z < pgdat->node_zones + MAX_NR_ZONES; z++) {
-			pr_info("mb: %s() %s->managed_pages %lu", __func__, z->name, z->managed_pages);
+			pr_info("mb after free_all_bootmem: %s() %s->managed_pages %lu", __func__, z->name, z->managed_pages);
 		}
 	}
 }
