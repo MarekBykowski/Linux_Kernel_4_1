@@ -155,6 +155,7 @@ ENTRY(__kvm_hyp_reset)
 	/* Branch into PA space */
 	adr	x0, 1f
 	bfi	x1, x0, #0, #PAGE_SHIFT
+	isb
 	br	x1
 
 	/* We're now in idmap, disable MMU */
