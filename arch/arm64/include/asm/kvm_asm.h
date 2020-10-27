@@ -137,6 +137,10 @@ extern char __restore_vgic_v2_state[];
 extern char __save_vgic_v3_state[];
 extern char __restore_vgic_v3_state[];
 
+/* EL2 routines are a special compilation unit */
+extern void __iomem *gpdma0;
+extern void __iomem *mmap_scb;
+extern u32 __enable_ccn_access(unsigned long phys_addr);
 #endif
 
 #endif /* __ARM_KVM_ASM_H__ */

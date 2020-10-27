@@ -60,7 +60,7 @@ static u8 kvm_next_vmid;
 static DEFINE_SPINLOCK(kvm_vmid_lock);
 
 #ifdef CONFIG_CPU_PM
-static DEFINE_PER_CPU(unsigned char, kvm_arm_hardware_enabled);
+DEFINE_PER_CPU(unsigned char, kvm_arm_hardware_enabled);
 #endif
 
 static void kvm_arm_set_running_vcpu(struct kvm_vcpu *vcpu)

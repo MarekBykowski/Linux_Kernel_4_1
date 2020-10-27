@@ -29,6 +29,7 @@
 #include <asm/memory.h>
 #include <asm/virt.h>
 
+
 #define CPU_GP_REG_OFFSET(x)	(CPU_GP_REGS + x)
 #define CPU_XREG_OFFSET(x)	CPU_GP_REG_OFFSET(CPU_USER_PT_REGS + 8*x)
 #define CPU_SPSR_OFFSET(x)	CPU_GP_REG_OFFSET(CPU_SPSR + 8*x)
@@ -913,6 +914,156 @@ __save_fpsimd:
 __restore_fpsimd:
 	restore_fpsimd
 	ret
+
+#include "../../../drivers/misc/axxia-oem.h"
+#include <asm/assembler.h> /* mov_q */
+ENTRY(__enable_ccn_access)
+	stp	x29, x30, [sp, #-32]!
+	mov	x29, lr
+
+	// x9 will hold an addr where gpdma0 is mapped
+	adrp	x9, gpdma0
+	kern_hyp_va	x9
+	ldr	x9, [x9]
+	kern_hyp_va	x9
+
+	// x10 - mmap_scb
+	adrp	x10, mmap_scb
+	kern_hyp_va	x10
+	ldr	x10, [x10]
+	kern_hyp_va	x10
+
+	/* Make sure no other transactions are in process */
+	add	x11, x9, #DMA_STATUS
+	ldr	w11, [x11]
+	dsb	ld
+#define DMA_STATUS_CH_ACTIVE_SHIFT 4
+	tbnz	w11, #DMA_STATUS_CH_ACTIVE_SHIFT, 2f
+
+	/* Set gpdma0_axprot_override to secure or non-secure */
+	mov	x11, #0x8800
+	movk	x11, #0x4, lsl #16
+	add	x11, x10, x11
+	ldr	x12, [x11]
+	dsb	ld
+	/*
+	 * Push gpdma0_axprot_override onto stack. We will pop
+	 * it from there to restore the security before returning.
+	 */
+	str	x12, [sp, #16]
+	mov	x12, #2
+	dsb	st
+	str	x12, [x11]
+
+	/* Destination is 0x80_0000_0000 */
+	add	x11, x9, #DMA_DST_ADDR_SEG
+	mov	x12, #0x80
+	dsb	st
+	str	x12, [x11]
+	add	x11, x9, #DMA_DST_CUR_ADDR
+	dsb	st
+	str	wzr, [x11]
+
+	/* phys_addr is the source */
+	add	x11, x9, #DMA_SRC_ADDR_SEG
+	mov	x1, x0
+	and	x1, x1, #0xff00000000
+	lsr	x1, x1, #32
+	dsb	st
+	str	w1, [x11]
+	add	x11, x9, #DMA_SRC_CUR_ADDR
+	mov	x1, x0
+	dsb	st
+	str	w1, [x11]
+
+	/* Remaing setup */
+	add     x11, x9, #DMA_SRC_ACCESS
+	mov_q	x12, (DMA_SRC_ACCESS_SRC_MASK_LENGTH(8) |\
+		      DMA_SRC_ACCESS_SRC_SIZE(3) |\
+		      DMA_SRC_ACCESS_SRC_BURST(5))
+	dsb	st
+	str	w12, [x11]
+	add     x11, x9, #DMA_DST_ACCESS
+	mov_q	x12, (DMA_DST_ACCESS_DST_SIZE(3) |\
+		      DMA_DST_ACCESS_DST_BURST(5))
+	dsb	st
+	str	w12, [x11]
+	add     x11, x9, #DMA_SRC_MASK	// #0x18
+	mvn	w12, wzr
+	dsb	st
+	str	w12, [x11]
+	add	x11, x9, #DMA_X_MODIF_SRC
+	mov     w12, #0x8 // sizeof unsigned long
+	dsb	st
+	str	w12, [x11]
+	add	x11, x9, #DMA_X_MODIF_DST // #0x24
+	mov     w12, #0x8 // sizeof unsigned long
+	dsb	st
+	str	w12, [x11]
+	mov     w12, #0x8 // sizeof unsigned long
+	dsb	st
+	str	w12, [x9, #DMA_X_MODIF_DST]
+	add	x11, x9, #DMA_X_SRC_COUNT
+	mov	w12, #0x1
+	dsb	st
+	str	w12, [x11]
+	add	x11, x9, #DMA_Y_SRC_COUNT
+	dsb	st
+	str	wzr, [x11]
+	add	x11, x9, #DMA_X_DST_COUNT
+	mov	w12, #0x1
+	dsb	st
+	str	w12, [x11]
+	add	x11, x9, #DMA_Y_DST_COUNT
+	dsb	st
+	str	wzr, [x11]
+
+	/* Start the transfer. */
+	add     x11, x9, #DMA_CHANNEL_CONFIG
+	mov_q	w12, (DMA_CONFIG_DST_SPACE(1) |\
+		      DMA_CONFIG_SRC_SPACE(1) |\
+		      DMA_CONFIG_CH_FULL_PRIORITY |\
+		      DMA_CONFIG_LAST_BLOCK |\
+		      DMA_CONFIG_FULL_DESCR_ADDR |\
+		      DMA_CONFIG_WAIT_FOR_TASK_CNT2 |\
+		      DMA_CONFIG_WAIT_FOR_TASK_CNT1 |\
+		      DMA_CONFIG_TX_EN |\
+		      DMA_CONFIG_CHAN_EN)
+	dsb	st
+	str	w12, [x11]
+
+	/* Wait for completion. */
+	mov	x11, #1000 /* repetitions*/
+	add	x12, x9, #DMA_STATUS
+	add	x13, x9, #DMA_X_DST_COUNT
+1:	subs	x11, x11, #0x1
+	b.eq	2f
+	ldr	w14, [x12]
+	dsb	ld
+	ubfx	w14, w14, #3, #1
+	cmp	w14, #1
+	ldr	w15, [x13]
+	dsb	ld
+	ccmp	wzr, w15, 0, eq
+	b.ne	1b
+
+	/* Pop from stack to restore gpdma0_axprot_override */
+	ldp	x29, x30, [sp], #16
+	ldp	x11, x12, [sp], #16
+	mov	x13, #0x8800
+	movk	x13, #0x4, lsl #16
+	add	x13, x10, x13
+	dsb	st
+	str	w11, [x13]
+	b	3f
+
+	/* Return either error (-1) or success (0) */
+2:	mov	w0, #0xffffffff // #-1
+	b	4f
+3:	mov	w0, #0
+
+4:	ret
+ENDPROC(__enable_ccn_access)
 
 /*
  * u64 __kvm_vcpu_run(struct kvm_vcpu *vcpu);
